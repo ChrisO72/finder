@@ -1,0 +1,14 @@
+node_modules
+
+# Build
+build
+.react-router
+.vite
+
+# Env
+.env
+.env.*
+!.env.example
+
+# OS
+.DS_Store

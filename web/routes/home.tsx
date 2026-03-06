@@ -2,8 +2,8 @@ import type { Route } from "./+types/home";
 
 export function meta({}: Route.MetaArgs) {
   return [
-    { title: "Labs stack" },
-    { name: "description", content: "Welcome to Labs stack!" },
+    { title: "Finder" },
+    { name: "description", content: "Welcome to Finder!" },
   ];
 }
 

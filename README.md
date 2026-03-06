@@ -9,14 +9,23 @@ No more scrubbing through hour-long videos hoping you remembered the right one.
 - React Router 7 (SSR) + Tailwind + Catalyst UI
 - Drizzle ORM + PostgreSQL
 - BullMQ job queues + Redis
+- Mistral Voxtral (audio transcription)
 - JWT auth with multi-org support
+
+## Prerequisites
+
+- Node.js 20+
+- **yt-dlp** -- `brew install yt-dlp`
+- **ffmpeg** -- `brew install ffmpeg`
+- Docker (for local Postgres + Redis)
 
 ## Getting started
 
 ```bash
 npm install
 cp .env.example .env   # fill in your keys
-docker compose up -d    # local Postgres
+docker compose up -d    # local Postgres + Redis
+npx drizzle-kit migrate # apply migrations
 npm run dev
 ```
 
@@ -26,9 +35,8 @@ npm run dev
 JWT_SECRET=your-secret-key
 REFRESH_SECRET=your-refresh-secret
 DATABASE_URL=postgresql://user:password@host:port/database?sslmode=require
-REDIS_URL=redis://default:password@host:port
-HIKER_API_KEY=your-hiker-api-key
-GOOGLE_API_KEY=your-google-api-key
+REDIS_URL=redis://localhost:6379
+MISTRAL_API_KEY=your-mistral-api-key
 ```
 
 ### Database
@@ -39,13 +47,14 @@ npx drizzle-kit migrate                          # apply migrations
 npx drizzle-kit studio                           # open database browser
 ```
 
-Local Postgres runs on `127.0.0.1:55432` via Docker Compose with these defaults:
+Local Postgres runs on `127.0.0.1:55432` and Redis on `127.0.0.1:6379` via Docker Compose.
 
-| Setting  | Default           |
-| -------- | ----------------- |
-| Database | `finder`          |
-| User     | `finder-user`     |
-| Password | `finder-password` |
+| Service  | Setting  | Default           |
+| -------- | -------- | ----------------- |
+| Postgres | Database | `finder`          |
+| Postgres | User     | `finder-user`     |
+| Postgres | Password | `finder-password` |
+| Redis    | URL      | `redis://localhost:6379` |
 
 ```bash
 docker compose down      # stop

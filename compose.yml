@@ -1,4 +1,4 @@
-name: finder-database
+name: finder
 
 networks:
   default:
@@ -6,6 +6,7 @@ networks:
 
 volumes:
   pgdata:
+  redisdata:
 
 services:
   database:
@@ -19,3 +20,11 @@ services:
       - pgdata:/var/lib/postgresql/data
     ports:
       - "127.0.0.1:55432:5432"
+
+  redis:
+    image: redis:7-alpine
+    restart: always
+    volumes:
+      - redisdata:/data
+    ports:
+      - "127.0.0.1:6379:6379"

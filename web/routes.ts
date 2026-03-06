@@ -9,8 +9,7 @@ export default [
   // Protected routes
   layout("routes/layout.tsx", [
     index("routes/home.tsx"),
-    route("do-things", "routes/do-things/index.tsx"),
-    route("manage-items", "routes/manage-items/index.tsx"),
-    route("manage-items/:item", "routes/manage-items/item.tsx"),
+    route("videos", "routes/videos/index.tsx"),
+    route("videos/:id", "routes/videos/video.tsx"),
   ]),
 ] satisfies RouteConfig;

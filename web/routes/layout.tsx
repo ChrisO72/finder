@@ -74,19 +74,16 @@ export default function Layout() {
         <Sidebar>
           <SidebarHeader>
             <div className="px-2 py-1">
-              <h2 className="text-lg font-semibold text-zinc-950 dark:text-white">Cool App Name</h2>
+              <h2 className="text-lg font-semibold text-zinc-950 dark:text-white">Finder</h2>
             </div>
           </SidebarHeader>
           <SidebarBody>
             <SidebarSection>
               <SidebarItem href="/" current={pathname === "/"}>
-                <SidebarLabel>Dashboard</SidebarLabel>
+                <SidebarLabel>Search</SidebarLabel>
               </SidebarItem>
-              <SidebarItem href="/do-things" current={pathname.startsWith("/do-things")}>
-                <SidebarLabel>Do things</SidebarLabel>
-              </SidebarItem>
-              <SidebarItem href="/manage-items" current={pathname.startsWith("/manage-items")}>
-                <SidebarLabel>Manage Items</SidebarLabel>
+              <SidebarItem href="/videos" current={pathname.startsWith("/videos")}>
+                <SidebarLabel>Videos</SidebarLabel>
               </SidebarItem>
             </SidebarSection>
           </SidebarBody>

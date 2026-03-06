@@ -1,4 +1,4 @@
-import { index, integer, pgTable, text, timestamp, varchar } from "drizzle-orm/pg-core";
+import { index, integer, pgTable, real, text, timestamp, varchar } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
 const timestamps = {
@@ -48,51 +48,53 @@ export const organizations = pgTable("organizations", {
   description: text(),
 });
 
-export const items = pgTable(
-  "items",
+export const videos = pgTable(
+  "videos",
   {
     id: integer().primaryKey().generatedAlwaysAsIdentity(),
     ...timestamps,
     organizationId: integer("organization_id")
       .notNull()
       .references(() => organizations.id, { onDelete: "cascade" }),
-    title: varchar({ length: 255 }).notNull(),
-    description: text(),
-    status: varchar({ enum: ["draft", "published", "archived"] })
+    youtubeUrl: text("youtube_url").notNull(),
+    youtubeVideoId: varchar("youtube_video_id", { length: 20 }).notNull(),
+    title: text(),
+    channelTitle: varchar("channel_title", { length: 255 }),
+    thumbnailUrl: text("thumbnail_url"),
+    durationSeconds: real("duration_seconds"),
+    processedSeconds: real("processed_seconds").notNull().default(0),
+    publishedAt: timestamp("published_at"),
+    status: varchar({ enum: ["pending", "processing", "ready", "failed"] })
       .notNull()
-      .default("draft"),
-    priority: integer().default(0),
+      .default("pending"),
+    errorMessage: text("error_message"),
   },
-  // Partial indexes: only index non-deleted rows to optimize soft-delete queries
   (table) => [
-    index("items_active_idx")
-      .on(table.id)
-      .where(sql`deleted_at IS NULL`),
-    index("items_org_active_idx")
+    index("videos_org_active_idx")
       .on(table.organizationId)
       .where(sql`deleted_at IS NULL`),
+    index("videos_youtube_video_id_idx").on(table.youtubeVideoId),
   ],
 );
 
-export const subItems = pgTable(
-  "sub_items",
+export const segments = pgTable(
+  "segments",
   {
     id: integer().primaryKey().generatedAlwaysAsIdentity(),
-    ...timestamps,
-    itemId: integer("item_id")
+    videoId: integer("video_id")
       .notNull()
-      .references(() => items.id, { onDelete: "cascade" }),
-    title: varchar({ length: 255 }).notNull(),
-    description: text(),
+      .references(() => videos.id, { onDelete: "cascade" }),
+    text: text().notNull(),
+    startSeconds: real("start_seconds").notNull(),
+    endSeconds: real("end_seconds").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
   },
-  // Partial indexes: only index non-deleted rows to optimize soft-delete queries
   (table) => [
-    index("sub_items_active_idx")
-      .on(table.id)
-      .where(sql`deleted_at IS NULL`),
-    index("sub_items_item_active_idx")
-      .on(table.itemId)
-      .where(sql`deleted_at IS NULL`),
+    index("segments_video_id_idx").on(table.videoId),
+    index("segments_search_idx").using(
+      "gin",
+      sql`to_tsvector('english', ${table.text})`,
+    ),
   ],
 );
 
@@ -102,11 +104,11 @@ export type InsertUser = typeof users.$inferInsert;
 export type SelectOrganization = typeof organizations.$inferSelect;
 export type InsertOrganization = typeof organizations.$inferInsert;
 
-export type SelectItem = typeof items.$inferSelect;
-export type InsertItem = typeof items.$inferInsert;
+export type SelectVideo = typeof videos.$inferSelect;
+export type InsertVideo = typeof videos.$inferInsert;
 
-export type SelectSubItem = typeof subItems.$inferSelect;
-export type InsertSubItem = typeof subItems.$inferInsert;
+export type SelectSegment = typeof segments.$inferSelect;
+export type InsertSegment = typeof segments.$inferInsert;
 
 export type SelectRefreshToken = typeof refreshTokens.$inferSelect;
 export type InsertRefreshToken = typeof refreshTokens.$inferInsert;

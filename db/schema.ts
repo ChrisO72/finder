@@ -1,5 +1,17 @@
-import { index, integer, pgTable, real, text, timestamp, varchar } from "drizzle-orm/pg-core";
+import { customType, index, integer, pgTable, real, text, timestamp, varchar } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
+
+const vector = customType<{ data: number[]; driverParam: string; config: { dimensions: number } }>({
+  dataType(config) {
+    return `vector(${config!.dimensions})`;
+  },
+  toDriver(value) {
+    return `[${value.join(",")}]`;
+  },
+  fromDriver(value) {
+    return (value as string).slice(1, -1).split(",").map(Number);
+  },
+});
 
 const timestamps = {
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -87,6 +99,7 @@ export const segments = pgTable(
     text: text().notNull(),
     startSeconds: real("start_seconds").notNull(),
     endSeconds: real("end_seconds").notNull(),
+    embedding: vector("embedding", { dimensions: 1024 }),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [
@@ -94,6 +107,10 @@ export const segments = pgTable(
     index("segments_search_idx").using(
       "gin",
       sql`to_tsvector('english', ${table.text})`,
+    ),
+    index("segments_embedding_idx").using(
+      "hnsw",
+      sql`${table.embedding} vector_cosine_ops`,
     ),
   ],
 );

@@ -10,7 +10,11 @@ import {
 } from "./lib/youtube";
 import { transcribeChunk } from "./lib/transcribe";
 import { getVideoById, updateVideo } from "../db/repositories/videos";
-import { bulkInsertSegments } from "../db/repositories/segments";
+import {
+  bulkInsertSegments,
+  updateSegmentEmbeddings,
+} from "../db/repositories/segments";
+import { embedTexts } from "./lib/embed";
 
 export type JobData = {
   "process-video": { videoId: number };
@@ -102,13 +106,19 @@ async function handleProcessVideo(data: JobData["process-video"]) {
       const transcriptSegments = await transcribeChunk(chunkPath, chunk.start);
 
       if (transcriptSegments.length > 0) {
-        await bulkInsertSegments(
+        const inserted = await bulkInsertSegments(
           transcriptSegments.map((seg) => ({
             videoId,
             text: seg.text,
             startSeconds: seg.startSeconds,
             endSeconds: seg.endSeconds,
           })),
+        );
+
+        console.log(`[Worker] Embedding ${inserted.length} segments`);
+        const embeddings = await embedTexts(inserted.map((s) => s.text));
+        await updateSegmentEmbeddings(
+          inserted.map((s, i) => ({ id: s.id, embedding: embeddings[i] })),
         );
       }
 

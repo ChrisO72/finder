@@ -10,7 +10,7 @@ volumes:
 
 services:
   database:
-    image: postgres:16.1-alpine3.19
+    image: pgvector/pgvector:pg16
     restart: always
     environment:
       POSTGRES_DB: "finder"

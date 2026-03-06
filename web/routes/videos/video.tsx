@@ -19,6 +19,7 @@ import {
   ArrowLeftIcon,
   TrashIcon,
 } from "@heroicons/react/24/outline";
+import { MagnifyingGlassIcon } from "@heroicons/react/20/solid";
 import { requireAuth } from "~/lib/session.server";
 import { getUserById } from "~/db/repositories/users";
 import {
@@ -121,6 +122,33 @@ function formatTimestamp(seconds: number): string {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
+function highlightWords(text: string, query: string): React.ReactNode {
+  const words = query
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  if (words.length === 0) return text;
+  const pattern = new RegExp(`(${words.join("|")})`, "gi");
+  const parts = text.split(pattern);
+  const checker = new RegExp(`^(?:${words.join("|")})$`, "i");
+  return (
+    <>
+      {parts.map((part, i) =>
+        checker.test(part) ? (
+          <mark
+            key={i}
+            className="rounded bg-yellow-200 px-0.5 dark:bg-yellow-500/30 dark:text-yellow-200"
+          >
+            {part}
+          </mark>
+        ) : (
+          part
+        ),
+      )}
+    </>
+  );
+}
+
 export default function VideoDetailPage() {
   const { video, segments } = useLoaderData<typeof loader>();
   const [searchParams] = useSearchParams();
@@ -130,13 +158,47 @@ export default function VideoDetailPage() {
   const chunkRefs = useRef<Map<number, HTMLButtonElement>>(new Map());
   const [playerReady, setPlayerReady] = useState(false);
   const [activeChunkIdx, setActiveChunkIdx] = useState<number | null>(null);
-  const [chunkWindow, setChunkWindow] = useState(30);
+  const [chunkWindow, setChunkWindow] = useState(10);
   const chunks = useMemo(
     () => groupSegments(segments as Segment[], chunkWindow),
     [segments, chunkWindow],
   );
   const [deleteOpen, setDeleteOpen] = useState(false);
   const isDeleting = fetcher.state !== "idle";
+
+  const searchQuery = searchParams.get("q") || "";
+  const searchMode = searchParams.get("mode") as
+    | "keyword"
+    | "semantic"
+    | null;
+  const matchedSegmentId = searchParams.get("sid")
+    ? parseInt(searchParams.get("sid")!, 10)
+    : null;
+  const matchFrom = searchParams.get("from")
+    ? parseFloat(searchParams.get("from")!)
+    : null;
+  const matchTo = searchParams.get("to")
+    ? parseFloat(searchParams.get("to")!)
+    : null;
+
+  const matchedChunkIndices = useMemo(() => {
+    const indices = new Set<number>();
+    if (searchMode === "keyword" && matchedSegmentId !== null) {
+      chunks.forEach((chunk, idx) => {
+        if (chunk.segmentIds.includes(matchedSegmentId)) indices.add(idx);
+      });
+    } else if (
+      searchMode === "semantic" &&
+      matchFrom !== null &&
+      matchTo !== null
+    ) {
+      chunks.forEach((chunk, idx) => {
+        if (chunk.startSeconds < matchTo && chunk.endSeconds > matchFrom)
+          indices.add(idx);
+      });
+    }
+    return indices;
+  }, [chunks, searchMode, matchedSegmentId, matchFrom, matchTo]);
 
   const initialTime = parseInt(searchParams.get("t") ?? "0", 10);
   const isProcessing =
@@ -245,11 +307,15 @@ export default function VideoDetailPage() {
   return (
     <div className="flex h-[calc(100vh-4rem)] flex-col">
       <Link
-        to="/videos"
+        to={
+          searchQuery
+            ? `/?q=${encodeURIComponent(searchQuery)}&mode=${searchMode ?? "semantic"}`
+            : "/videos"
+        }
         className="mb-4 inline-flex items-center gap-1 text-sm text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
       >
         <ArrowLeftIcon className="size-4" />
-        Back to Videos
+        {searchQuery ? "Back to search results" : "Back to Videos"}
       </Link>
 
       <div className="flex min-h-0 flex-1 flex-col gap-6">
@@ -343,6 +409,23 @@ export default function VideoDetailPage() {
 
         {/* Transcript */}
         <div className="flex min-h-0 flex-1 flex-col">
+          {searchQuery && (
+            <div className="mb-3 flex items-center gap-2 rounded-lg bg-zinc-50 px-3 py-2 dark:bg-zinc-800/50">
+              <MagnifyingGlassIcon className="size-4 shrink-0 text-zinc-400" />
+              <span className="text-sm text-zinc-600 dark:text-zinc-300">
+                &ldquo;{searchQuery}&rdquo;
+              </span>
+              <span
+                className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                  searchMode === "keyword"
+                    ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-500/20 dark:text-yellow-300"
+                    : "bg-purple-100 text-purple-800 dark:bg-purple-500/20 dark:text-purple-300"
+                }`}
+              >
+                {searchMode === "keyword" ? "Keyword" : "Semantic"}
+              </span>
+            </div>
+          )}
           <div className="mb-3 flex shrink-0 items-center justify-between">
             <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">
               Transcript
@@ -411,14 +494,22 @@ export default function VideoDetailPage() {
                   className={`w-full rounded-md px-3 py-2 text-left transition ${
                     activeChunkIdx === idx
                       ? "bg-blue-50 ring-1 ring-blue-200 dark:bg-blue-500/10 dark:ring-blue-500/30"
-                      : "hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                      : matchedChunkIndices.has(idx)
+                        ? searchMode === "keyword"
+                          ? "bg-yellow-50 ring-1 ring-yellow-300 dark:bg-yellow-500/10 dark:ring-yellow-500/30"
+                          : "bg-purple-50 ring-1 ring-purple-200 dark:bg-purple-500/10 dark:ring-purple-500/30"
+                        : "hover:bg-zinc-50 dark:hover:bg-zinc-800"
                   }`}
                 >
                   <span className="mr-2 inline-block align-top text-xs font-medium text-blue-600 dark:text-blue-400">
                     {formatTimestamp(chunk.startSeconds)}
                   </span>
                   <span className="text-sm text-zinc-700 dark:text-zinc-300">
-                    {chunk.text}
+                    {searchMode === "keyword" &&
+                    matchedChunkIndices.has(idx) &&
+                    searchQuery
+                      ? highlightWords(chunk.text, searchQuery)
+                      : chunk.text}
                   </span>
                 </button>
               ))}

@@ -1,15 +1,13 @@
 # finder
 
-Turn videos into searchable archives. Drop a YouTube link, and Finder transcribes it, indexes the content, and lets you search across everything. Looking for more info on Psalm 22? Finder points you to timestamp 10:11 in that one Bible study from last March.
-
-No more scrubbing through hour-long videos hoping you remembered the right one.
+Turn any video into something you can search. Paste a YouTube link and jump straight to the moment you’re looking for.
 
 ## Tech stack
 
 - React Router 7 (SSR) + Tailwind + Catalyst UI
 - Drizzle ORM + PostgreSQL
 - BullMQ job queues + Redis
-- Mistral Voxtral (audio transcription)
+- Mistral Voxtral (audio transcription) + Mistral Embed (embeddings)
 - JWT auth with multi-org support
 
 ## Prerequisites
@@ -49,11 +47,11 @@ npx drizzle-kit studio                           # open database browser
 
 Local Postgres runs on `127.0.0.1:55432` and Redis on `127.0.0.1:6379` via Docker Compose.
 
-| Service  | Setting  | Default           |
-| -------- | -------- | ----------------- |
-| Postgres | Database | `finder`          |
-| Postgres | User     | `finder-user`     |
-| Postgres | Password | `finder-password` |
+| Service  | Setting  | Default                  |
+| -------- | -------- | ------------------------ |
+| Postgres | Database | `finder`                 |
+| Postgres | User     | `finder-user`            |
+| Postgres | Password | `finder-password`        |
 | Redis    | URL      | `redis://localhost:6379` |
 
 ```bash

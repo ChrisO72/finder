@@ -143,7 +143,7 @@ export default function Home() {
             ? keywordResults.map((r) => (
                 <Link
                   key={r.segmentId}
-                  to={`/videos/${r.videoId}?t=${Math.floor(r.startSeconds)}`}
+                  to={`/videos/${r.videoId}?t=${Math.floor(r.startSeconds)}&q=${encodeURIComponent(query)}&mode=keyword&sid=${r.segmentId}`}
                   className="block rounded-lg border border-zinc-200 p-4 transition hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:border-zinc-600 dark:hover:bg-zinc-800/50"
                 >
                   <div className="mb-1 flex items-center gap-2">
@@ -171,7 +171,7 @@ export default function Home() {
             : semanticResults.map((chunk, i) => (
                 <Link
                   key={`${chunk.videoId}-${chunk.startSeconds}-${i}`}
-                  to={`/videos/${chunk.videoId}?t=${Math.floor(chunk.startSeconds)}`}
+                  to={`/videos/${chunk.videoId}?t=${Math.floor(chunk.startSeconds)}&q=${encodeURIComponent(query)}&mode=semantic&from=${Math.floor(chunk.startSeconds)}&to=${Math.ceil(chunk.endSeconds)}`}
                   className="block rounded-lg border border-zinc-200 p-4 transition hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:border-zinc-600 dark:hover:bg-zinc-800/50"
                 >
                   <div className="mb-1 flex items-center gap-2">

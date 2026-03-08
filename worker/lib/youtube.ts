@@ -52,6 +52,7 @@ export async function downloadAudio(
   outputPath: string,
 ): Promise<void> {
   const subprocess = youtubeDl.exec(youtubeUrl, {
+    format: "bestaudio",
     extractAudio: true,
     audioFormat: "m4a",
     output: outputPath,

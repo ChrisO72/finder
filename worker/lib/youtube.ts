@@ -5,6 +5,14 @@ import ffmpegPath from "ffmpeg-static";
 
 const exec = promisify(execFile);
 
+function proxyFlags(): Record<string, string | boolean> {
+  if (!process.env.SCRAPINGBEE_API_KEY) return {};
+  return {
+    proxy: `http://${process.env.SCRAPINGBEE_API_KEY}:render_js=False@proxy.scrapingbee.com:8886`,
+    noCheckCertificates: true,
+  };
+}
+
 export type VideoMetadata = {
   title: string;
   channelTitle: string;
@@ -20,6 +28,7 @@ export async function fetchVideoMetadata(
     dumpJson: true,
     skipDownload: true,
     jsRuntimes: "node",
+    ...proxyFlags(),
   })) as Record<string, unknown>;
 
   return {

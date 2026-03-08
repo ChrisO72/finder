@@ -1,5 +1,17 @@
-import { index, integer, pgTable, text, timestamp, varchar } from "drizzle-orm/pg-core";
+import { customType, index, integer, pgTable, primaryKey, real, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
+
+const vector = customType<{ data: number[]; driverParam: string; config: { dimensions: number } }>({
+  dataType(config) {
+    return `vector(${config!.dimensions})`;
+  },
+  toDriver(value) {
+    return `[${value.join(",")}]`;
+  },
+  fromDriver(value) {
+    return (value as string).slice(1, -1).split(",").map(Number);
+  },
+});
 
 const timestamps = {
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -48,51 +60,117 @@ export const organizations = pgTable("organizations", {
   description: text(),
 });
 
-export const items = pgTable(
-  "items",
+export const videos = pgTable(
+  "videos",
   {
     id: integer().primaryKey().generatedAlwaysAsIdentity(),
     ...timestamps,
     organizationId: integer("organization_id")
       .notNull()
       .references(() => organizations.id, { onDelete: "cascade" }),
-    title: varchar({ length: 255 }).notNull(),
-    description: text(),
-    status: varchar({ enum: ["draft", "published", "archived"] })
+    youtubeUrl: text("youtube_url").notNull(),
+    youtubeVideoId: varchar("youtube_video_id", { length: 20 }).notNull(),
+    title: text(),
+    channelTitle: varchar("channel_title", { length: 255 }),
+    thumbnailUrl: text("thumbnail_url"),
+    durationSeconds: real("duration_seconds"),
+    processedSeconds: real("processed_seconds").notNull().default(0),
+    publishedAt: timestamp("published_at"),
+    status: varchar({ enum: ["pending", "processing", "ready", "failed"] })
       .notNull()
-      .default("draft"),
-    priority: integer().default(0),
+      .default("pending"),
+    errorMessage: text("error_message"),
+    summary: text(),
+    summaryEmbedding: vector("summary_embedding", { dimensions: 1024 }),
   },
-  // Partial indexes: only index non-deleted rows to optimize soft-delete queries
   (table) => [
-    index("items_active_idx")
-      .on(table.id)
-      .where(sql`deleted_at IS NULL`),
-    index("items_org_active_idx")
+    index("videos_org_active_idx")
       .on(table.organizationId)
       .where(sql`deleted_at IS NULL`),
+    index("videos_youtube_video_id_idx").on(table.youtubeVideoId),
+    index("videos_summary_search_idx").using(
+      "gin",
+      sql`to_tsvector('english', ${table.summary})`,
+    ),
+    index("videos_summary_embedding_idx").using(
+      "hnsw",
+      sql`${table.summaryEmbedding} vector_cosine_ops`,
+    ),
   ],
 );
 
-export const subItems = pgTable(
-  "sub_items",
+export const segments = pgTable(
+  "segments",
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    videoId: integer("video_id")
+      .notNull()
+      .references(() => videos.id, { onDelete: "cascade" }),
+    text: text().notNull(),
+    startSeconds: real("start_seconds").notNull(),
+    endSeconds: real("end_seconds").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("segments_video_id_idx").on(table.videoId),
+    index("segments_search_idx").using(
+      "gin",
+      sql`to_tsvector('english', ${table.text})`,
+    ),
+  ],
+);
+
+export const windows = pgTable(
+  "windows",
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    videoId: integer("video_id")
+      .notNull()
+      .references(() => videos.id, { onDelete: "cascade" }),
+    text: text().notNull(),
+    startSeconds: real("start_seconds").notNull(),
+    endSeconds: real("end_seconds").notNull(),
+    embedding: vector("embedding", { dimensions: 1024 }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("windows_video_id_idx").on(table.videoId),
+    index("windows_embedding_idx").using(
+      "hnsw",
+      sql`${table.embedding} vector_cosine_ops`,
+    ),
+  ],
+);
+
+export const tags = pgTable(
+  "tags",
   {
     id: integer().primaryKey().generatedAlwaysAsIdentity(),
     ...timestamps,
-    itemId: integer("item_id")
+    name: varchar({ length: 100 }).notNull(),
+    slug: varchar({ length: 100 }).notNull(),
+    organizationId: integer("organization_id")
       .notNull()
-      .references(() => items.id, { onDelete: "cascade" }),
-    title: varchar({ length: 255 }).notNull(),
-    description: text(),
+      .references(() => organizations.id, { onDelete: "cascade" }),
   },
-  // Partial indexes: only index non-deleted rows to optimize soft-delete queries
   (table) => [
-    index("sub_items_active_idx")
-      .on(table.id)
-      .where(sql`deleted_at IS NULL`),
-    index("sub_items_item_active_idx")
-      .on(table.itemId)
-      .where(sql`deleted_at IS NULL`),
+    uniqueIndex("tags_slug_org_idx").on(table.slug, table.organizationId),
+  ],
+);
+
+export const videoTags = pgTable(
+  "video_tags",
+  {
+    videoId: integer("video_id")
+      .notNull()
+      .references(() => videos.id, { onDelete: "cascade" }),
+    tagId: integer("tag_id")
+      .notNull()
+      .references(() => tags.id, { onDelete: "cascade" }),
+  },
+  (table) => [
+    primaryKey({ columns: [table.videoId, table.tagId] }),
+    index("video_tags_tag_id_idx").on(table.tagId),
   ],
 );
 
@@ -102,11 +180,20 @@ export type InsertUser = typeof users.$inferInsert;
 export type SelectOrganization = typeof organizations.$inferSelect;
 export type InsertOrganization = typeof organizations.$inferInsert;
 
-export type SelectItem = typeof items.$inferSelect;
-export type InsertItem = typeof items.$inferInsert;
+export type SelectVideo = typeof videos.$inferSelect;
+export type InsertVideo = typeof videos.$inferInsert;
 
-export type SelectSubItem = typeof subItems.$inferSelect;
-export type InsertSubItem = typeof subItems.$inferInsert;
+export type SelectSegment = typeof segments.$inferSelect;
+export type InsertSegment = typeof segments.$inferInsert;
+
+export type SelectWindow = typeof windows.$inferSelect;
+export type InsertWindow = typeof windows.$inferInsert;
 
 export type SelectRefreshToken = typeof refreshTokens.$inferSelect;
 export type InsertRefreshToken = typeof refreshTokens.$inferInsert;
+
+export type SelectTag = typeof tags.$inferSelect;
+export type InsertTag = typeof tags.$inferInsert;
+
+export type SelectVideoTag = typeof videoTags.$inferSelect;
+export type InsertVideoTag = typeof videoTags.$inferInsert;

@@ -1,9 +1,11 @@
 import "dotenv/config";
 
+const redisUrl = new URL(process.env.REDIS_URL || "redis://localhost:6379");
+
 export const redisConnection = {
-  host: new URL(process.env.REDIS_URL!).hostname,
-  port: parseInt(new URL(process.env.REDIS_URL!).port || "6379"),
-  username: new URL(process.env.REDIS_URL!).username || undefined,
-  password: new URL(process.env.REDIS_URL!).password || undefined,
+  host: redisUrl.hostname,
+  port: parseInt(redisUrl.port || "6379"),
+  username: redisUrl.username || undefined,
+  password: redisUrl.password || undefined,
   maxRetriesPerRequest: null,
 };

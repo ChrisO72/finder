@@ -75,6 +75,7 @@ async function handleProcessVideo(data: JobData["process-video"]) {
 
     // Step 2: Download full audio (skip if file already exists — resuming)
     if (!existsSync(audioPath)) {
+      await new Promise((r) => setTimeout(r, 1000));
       console.log(`[Worker] Downloading audio to ${audioPath}`);
       await downloadAudio(video.youtubeUrl, audioPath);
     }

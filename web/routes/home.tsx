@@ -18,7 +18,7 @@ import { Heading } from "~/components/ui-kit/heading";
 import { getTagColorClass } from "~/lib/tag-colors";
 import type { Route } from "./+types/home";
 
-export function meta({}: Route.MetaArgs) {
+export function meta({ }: Route.MetaArgs) {
   return [
     { title: "Finder" },
     { name: "description", content: "Search across your video library" },
@@ -186,18 +186,16 @@ export default function Home() {
       <div className="mb-6 flex justify-end">
         <Link
           to={`/?${exactToggleParams.toString()}`}
-          className={`inline-flex items-center gap-1.5 rounded px-2 py-1 text-xs transition ${
-            mode === "exact"
-              ? "text-blue-700 dark:text-blue-400"
-              : "text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300"
-          }`}
+          className={`inline-flex items-center gap-1.5 rounded px-2 py-1 text-xs transition ${mode === "exact"
+            ? "text-blue-700 dark:text-blue-400"
+            : "text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300"
+            }`}
         >
           <span
-            className={`flex size-3.5 items-center justify-center rounded border transition ${
-              mode === "exact"
-                ? "border-blue-500 bg-blue-500 dark:border-blue-400 dark:bg-blue-400"
-                : "border-zinc-300 dark:border-zinc-600"
-            }`}
+            className={`flex size-3.5 items-center justify-center rounded border transition ${mode === "exact"
+              ? "border-blue-500 bg-blue-500 dark:border-blue-400 dark:bg-blue-400"
+              : "border-zinc-300 dark:border-zinc-600"
+              }`}
           >
             {mode === "exact" && (
               <svg className="size-2.5 text-white" viewBox="0 0 12 12" fill="none">
@@ -246,31 +244,33 @@ export default function Home() {
           </p>
 
           {resultTags.length > 0 && (
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+            <div className="flex items-center gap-2">
+              <span className="shrink-0 text-xs font-medium text-zinc-500 dark:text-zinc-400">
                 Filter by tag:
               </span>
-              {resultTags.map((tag) => {
-                const isActive = tagSlug === tag.slug;
-                const params = new URLSearchParams();
-                params.set("q", query);
-                if (mode === "exact") params.set("mode", "exact");
-                if (!isActive) params.set("tag", tag.slug);
-                return (
-                  <Link
-                    key={tag.id}
-                    to={`/?${params.toString()}`}
-                    className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium transition ${
-                      isActive
-                        ? `ring-2 ring-blue-500 dark:ring-blue-400 ${getTagColorClass(tag.name)}`
-                        : getTagColorClass(tag.name)
-                    }`}
-                  >
-                    {tag.name}
-                    {isActive && <XMarkIcon className="size-3" />}
-                  </Link>
-                );
-              })}
+              <div className="flex items-center gap-1.5 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {resultTags.map((tag) => {
+                  const isActive = tagSlug === tag.slug;
+                  const params = new URLSearchParams();
+                  params.set("q", query);
+                  if (mode === "exact") params.set("mode", "exact");
+                  if (!isActive) params.set("tag", tag.slug);
+                  return (
+                    <Link
+                      key={tag.id}
+                      to={`/?${params.toString()}`}
+                      className={`inline-flex shrink-0 items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium transition ${
+                        isActive
+                          ? `ring-2 ring-blue-500 dark:ring-blue-400 ${getTagColorClass(tag.name)}`
+                          : getTagColorClass(tag.name)
+                      }`}
+                    >
+                      {tag.name}
+                      {isActive && <XMarkIcon className="size-3" />}
+                    </Link>
+                  );
+                })}
+              </div>
             </div>
           )}
 
@@ -289,54 +289,67 @@ export default function Home() {
               <Link
                 key={`${r.videoId}-${r.startSeconds}-${i}`}
                 to={linkUrl}
-                className="block rounded-lg border border-zinc-200 p-4 transition hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:border-zinc-600 dark:hover:bg-zinc-800/50"
+                className="flex overflow-hidden rounded-lg border border-zinc-200 transition hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:border-zinc-600 dark:hover:bg-zinc-800/50"
               >
-                <div className="flex items-center gap-2">
-                  <span className="truncate text-sm font-medium text-zinc-900 dark:text-white">
-                    {r.videoTitle ?? "Untitled"}
-                  </span>
-                  {visibleTags.length > 0 && (
-                    <span className="shrink-0 truncate text-xs text-zinc-400 dark:text-zinc-500">
-                      {visibleTags.map((t) => t.name).join(", ")}
-                      {overflowCount > 0 && ` +${overflowCount}`}
-                    </span>
-                  )}
-                </div>
-                <p className="mb-2 text-xs text-zinc-500 dark:text-zinc-400">
-                  {r.channelTitle ?? "\u00A0"}
-                </p>
-                <div className="mb-1.5 space-y-1">
+                {r.thumbnailUrl ? (
+                  <img
+                    src={r.thumbnailUrl}
+                    alt=""
+                    className="hidden sm:block w-44 shrink-0 object-cover"
+                  />
+                ) : (
+                  <div className="hidden sm:flex w-44 shrink-0 items-center justify-center bg-zinc-100 dark:bg-zinc-800">
+                    <PlayCircleIcon className="size-8 text-zinc-400" />
+                  </div>
+                )}
+                <div className="flex-1 min-w-0 p-4">
                   <div className="flex items-center gap-2">
-                    <span className="w-16 shrink-0 text-xs text-zinc-400 dark:text-zinc-500">Source</span>
-                    {isSummaryResult ? (
-                      <span className="inline-flex items-center gap-1 rounded bg-teal-50 px-2 py-0.5 text-xs font-medium text-teal-700 dark:bg-teal-500/10 dark:text-teal-400">
-                        <DocumentTextIcon className="size-3.5" />
-                        Summary
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 rounded bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-500/10 dark:text-blue-400">
-                        <PlayCircleIcon className="size-3.5" />
-                        {r.source === "keyword"
-                          ? formatTimestamp(r.startSeconds)
-                          : `${formatTimestamp(r.startSeconds)} – ${formatTimestamp(r.endSeconds)}`}
+                    <span className="truncate text-sm font-medium text-zinc-900 dark:text-white">
+                      {r.videoTitle ?? "Untitled"}
+                    </span>
+                    {visibleTags.length > 0 && (
+                      <span className="shrink-0 truncate text-xs text-zinc-400 dark:text-zinc-500">
+                        {visibleTags.map((t) => t.name).join(", ")}
+                        {overflowCount > 0 && ` +${overflowCount}`}
                       </span>
                     )}
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="w-16 shrink-0 text-xs text-zinc-400 dark:text-zinc-500">Match</span>
-                    <SourceBadges source={r.source} />
-                  </div>
-                </div>
-                {r.headline ? (
-                  <p
-                    className="line-clamp-3 text-sm text-zinc-600 dark:text-zinc-300 [&_mark]:rounded [&_mark]:bg-yellow-200 [&_mark]:px-0.5 dark:[&_mark]:bg-yellow-500/30 dark:[&_mark]:text-yellow-200"
-                    dangerouslySetInnerHTML={{ __html: r.headline }}
-                  />
-                ) : (
-                  <p className="line-clamp-3 text-sm text-zinc-600 dark:text-zinc-300">
-                    {r.text}
+                  <p className="mb-2 text-xs text-zinc-500 dark:text-zinc-400">
+                    {r.channelTitle ?? "\u00A0"}
                   </p>
-                )}
+                  <div className="mb-1.5 space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="w-16 shrink-0 text-xs text-zinc-400 dark:text-zinc-500">Source</span>
+                      {isSummaryResult ? (
+                        <span className="inline-flex items-center gap-1 rounded bg-teal-50 px-2 py-0.5 text-xs font-medium text-teal-700 dark:bg-teal-500/10 dark:text-teal-400">
+                          <DocumentTextIcon className="size-3.5" />
+                          Summary
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 rounded bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-500/10 dark:text-blue-400">
+                          <PlayCircleIcon className="size-3.5" />
+                          {r.source === "keyword"
+                            ? formatTimestamp(r.startSeconds)
+                            : `${formatTimestamp(r.startSeconds)} – ${formatTimestamp(r.endSeconds)}`}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="w-16 shrink-0 text-xs text-zinc-400 dark:text-zinc-500">Match</span>
+                      <SourceBadges source={r.source} />
+                    </div>
+                  </div>
+                  {r.headline ? (
+                    <p
+                      className="line-clamp-3 text-sm text-zinc-600 dark:text-zinc-300 [&_mark]:rounded [&_mark]:bg-yellow-200 [&_mark]:px-0.5 dark:[&_mark]:bg-yellow-500/30 dark:[&_mark]:text-yellow-200"
+                      dangerouslySetInnerHTML={{ __html: r.headline }}
+                    />
+                  ) : (
+                    <p className="line-clamp-3 text-sm text-zinc-600 dark:text-zinc-300">
+                      {r.text}
+                    </p>
+                  )}
+                </div>
               </Link>
             );
           })}
@@ -345,19 +358,19 @@ export default function Home() {
 
       {!query && !tagSlug && allTags.length > 0 && (
         <div>
-          <h2 className="mb-4 text-lg font-semibold text-zinc-900 dark:text-white">
+          <h2 className="mb-5 text-lg font-semibold text-zinc-900 dark:text-white">
             Browse by topic
           </h2>
-          <div className="flex flex-wrap gap-2">
-            {allTags.map((tag) => (
+          <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5">
+            {allTags.slice(0, 10).map((tag) => (
               <Link
                 key={tag.id}
                 to={`/?tag=${encodeURIComponent(tag.slug)}`}
-                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition ${getTagColorClass(tag.name)}`}
+                className={`flex aspect-square flex-col items-center justify-center rounded-xl text-center shadow-sm transition hover:shadow-md ${getTagColorClass(tag.name)}`}
               >
-                {tag.name}
-                <span className="text-xs opacity-60">
-                  {tag.videoCount}
+                <span className="w-full break-words px-2 text-center text-base font-medium capitalize">{tag.name}</span>
+                <span className="mt-1 text-xs opacity-50">
+                  {tag.videoCount} video{tag.videoCount !== 1 ? "s" : ""}
                 </span>
               </Link>
             ))}

@@ -116,7 +116,7 @@ export default function VideoDetailPage() {
   }, []);
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] flex-col">
+    <div className="flex min-h-[calc(100vh-4rem)] flex-col md:h-[calc(100vh-4rem)]">
       {/* Back link */}
       <Link
         to={
@@ -130,10 +130,10 @@ export default function VideoDetailPage() {
         {searchQuery ? "Back to search results" : "Back to videos"}
       </Link>
 
-      {/* 50/50 horizontal split */}
-      <div className="flex min-h-0 flex-1 gap-6">
+      {/* 50/50 horizontal split, single column on mobile */}
+      <div className="flex min-h-0 flex-1 flex-col gap-6 md:flex-row md:overflow-hidden">
         {/* Left: Video + Info */}
-        <div className="flex min-w-0 flex-1 flex-col overflow-hidden pr-2">
+        <div className="flex min-w-0 flex-shrink-0 flex-col md:flex-1 md:overflow-hidden md:pr-2">
           <div className="shrink-0">
             <VideoPlayer
               youtubeVideoId={video.youtubeVideoId}
@@ -147,7 +147,7 @@ export default function VideoDetailPage() {
         </div>
 
         {/* Right: Transcript */}
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <div className="flex min-h-[50vh] min-w-0 flex-col md:min-h-0 md:flex-1">
           <TranscriptPanel
             segments={segments}
             playerHandle={playerHandle}

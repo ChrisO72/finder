@@ -6,6 +6,7 @@ import { redirect } from "react-router";
 import { Heading } from "../components/ui-kit/heading";
 import { Text } from "../components/ui-kit/text";
 import { Input } from "../components/ui-kit/input";
+import { Textarea } from "../components/ui-kit/textarea";
 import { Button } from "../components/ui-kit/button";
 import { Field, Label, Description } from "../components/ui-kit/fieldset";
 import type { Route } from "./+types/settings";
@@ -21,6 +22,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   return {
     webshareProxyUrl: org.webshareProxyUrl ?? "",
     defaultProxyUrl: process.env.WEBSHARE_PROXY_URL ?? "",
+    youtubeCookies: org.youtubeCookies ?? "",
   };
 }
 
@@ -31,14 +33,15 @@ export async function action({ request }: Route.ActionArgs) {
 
   const formData = await request.formData();
   const webshareProxyUrl = (formData.get("webshareProxyUrl") as string)?.trim() || null;
+  const youtubeCookies = (formData.get("youtubeCookies") as string)?.trim() || null;
 
-  await updateOrganization(user.organizationId, { webshareProxyUrl });
+  await updateOrganization(user.organizationId, { webshareProxyUrl, youtubeCookies });
 
   return { success: true };
 }
 
 export default function Settings() {
-  const { webshareProxyUrl, defaultProxyUrl } = useLoaderData<typeof loader>();
+  const { webshareProxyUrl, defaultProxyUrl, youtubeCookies } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";
@@ -60,6 +63,30 @@ export default function Settings() {
             type="url"
             placeholder={defaultProxyUrl || "http://user:pass@host:port"}
             defaultValue={webshareProxyUrl}
+          />
+        </Field>
+
+        <Field>
+          <Label>YouTube Cookies</Label>
+          <Description>
+            Cookies from an authenticated YouTube session, in Netscape cookies.txt format.
+            Required when YouTube blocks downloads with bot detection.{" "}
+            <a
+              href="https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-blue-600 underline hover:text-blue-500 dark:text-blue-400 dark:hover:text-blue-300"
+            >
+              Get YouTube Cookies
+            </a>{" "}
+            — install this Chrome extension, go to youtube.com while signed in, and export your cookies.
+          </Description>
+          <Textarea
+            name="youtubeCookies"
+            rows={6}
+            resizable
+            placeholder={"# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t0\tSID\t..."}
+            defaultValue={youtubeCookies}
           />
         </Field>
 

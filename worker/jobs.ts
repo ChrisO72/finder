@@ -8,6 +8,7 @@ import {
   downloadAudio,
   extractChunk,
   setProxyUrl,
+  setCookies,
 } from "./lib/youtube";
 import { transcribeChunk } from "./lib/transcribe";
 import { getVideoById, updateVideo } from "../db/repositories/videos";
@@ -49,6 +50,7 @@ async function handleProcessVideo(data: JobData["process-video"]) {
 
   const org = await getOrganizationById(video.organizationId);
   setProxyUrl(org?.webshareProxyUrl);
+  setCookies(org?.youtubeCookies);
 
   const tmpDir = path.join(os.tmpdir(), "finder", String(videoId));
   await mkdir(tmpDir, { recursive: true });

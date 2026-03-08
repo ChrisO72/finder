@@ -1,20 +1,39 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { writeFileSync } from "node:fs";
+import path from "node:path";
+import os from "node:os";
 import youtubeDl from "youtube-dl-exec";
 import ffmpegPath from "ffmpeg-static";
 
 const exec = promisify(execFile);
 
 let _proxyUrl: string | undefined;
+let _cookiesPath: string | undefined;
 
 export function setProxyUrl(url: string | null | undefined) {
   _proxyUrl = url || undefined;
+}
+
+export function setCookies(cookieText: string | null | undefined) {
+  if (!cookieText?.trim()) {
+    _cookiesPath = undefined;
+    return;
+  }
+  const p = path.join(os.tmpdir(), "yt-cookies.txt");
+  writeFileSync(p, cookieText, "utf-8");
+  _cookiesPath = p;
 }
 
 function proxyFlags(): Record<string, string | boolean> {
   const url = _proxyUrl ?? process.env.WEBSHARE_PROXY_URL;
   if (!url) return {};
   return { proxy: url };
+}
+
+function cookieFlags(): Record<string, string | boolean> {
+  if (!_cookiesPath) return {};
+  return { cookies: _cookiesPath };
 }
 
 export type VideoMetadata = {
@@ -33,6 +52,7 @@ export async function fetchVideoMetadata(
     skipDownload: true,
     jsRuntimes: "node",
     ...proxyFlags(),
+    ...cookieFlags(),
   })) as Record<string, unknown>;
 
   return {
@@ -52,11 +72,12 @@ export async function downloadAudio(
   outputPath: string,
 ): Promise<void> {
   const subprocess = youtubeDl.exec(youtubeUrl, {
-    format: "bestaudio",
+    format: "bestaudio/best",
     output: outputPath,
     jsRuntimes: "node",
     newline: true,
     ...proxyFlags(),
+    ...cookieFlags(),
   });
 
   let lastLog = 0;

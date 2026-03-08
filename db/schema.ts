@@ -59,6 +59,7 @@ export const organizations = pgTable("organizations", {
   name: varchar({ length: 255 }).notNull(),
   description: text(),
   webshareProxyUrl: text("webshare_proxy_url"),
+  youtubeCookies: text("youtube_cookies"),
 });
 
 export const videos = pgTable(

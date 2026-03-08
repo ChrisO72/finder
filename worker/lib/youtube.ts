@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { writeFileSync } from "node:fs";
+import { readdir } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
 import youtubeDl from "youtube-dl-exec";
@@ -67,13 +68,21 @@ export async function fetchVideoMetadata(
   };
 }
 
+/**
+ * Downloads audio and returns the actual file path (extension chosen by yt-dlp).
+ * `outputBase` should be the path without an extension, e.g. `/tmp/finder/12/abc123`
+ */
 export async function downloadAudio(
   youtubeUrl: string,
-  outputPath: string,
-): Promise<void> {
+  outputBase: string,
+): Promise<string> {
+  const dir = path.dirname(outputBase);
+  const stem = path.basename(outputBase);
+  const outputTemplate = path.join(dir, `${stem}.%(ext)s`);
+
   const subprocess = youtubeDl.exec(youtubeUrl, {
     format: "bestaudio/best",
-    output: outputPath,
+    output: outputTemplate,
     jsRuntimes: "node",
     newline: true,
     ...proxyFlags(),
@@ -96,6 +105,11 @@ export async function downloadAudio(
   });
 
   await subprocess;
+
+  const files = await readdir(dir);
+  const match = files.find((f) => f.startsWith(`${stem}.`));
+  if (!match) throw new Error(`Download produced no file matching ${stem}.*`);
+  return path.join(dir, match);
 }
 
 export async function extractChunk(

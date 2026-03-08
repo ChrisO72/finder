@@ -1,5 +1,5 @@
 import { Job } from "bullmq";
-import { existsSync } from "node:fs";
+import { readdirSync } from "node:fs";
 import { mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
@@ -55,7 +55,7 @@ async function handleProcessVideo(data: JobData["process-video"]) {
   const tmpDir = path.join(os.tmpdir(), "finder", String(videoId));
   await mkdir(tmpDir, { recursive: true });
 
-  const audioPath = path.join(tmpDir, `${video.youtubeVideoId}.webm`);
+  const audioBase = path.join(tmpDir, video.youtubeVideoId);
 
   try {
     await updateVideo(videoId, { status: "processing" });
@@ -81,11 +81,17 @@ async function handleProcessVideo(data: JobData["process-video"]) {
     }
 
     // Step 2: Download full audio (skip if file already exists — resuming)
-    if (!existsSync(audioPath)) {
+    let audioPath: string;
+    const existing = readdirSync(tmpDir).find((f) => f.startsWith(`${video.youtubeVideoId}.`));
+    if (existing) {
+      audioPath = path.join(tmpDir, existing);
+    } else {
       await new Promise((r) => setTimeout(r, 1000));
-      console.log(`[Worker] Downloading audio to ${audioPath}`);
-      await downloadAudio(video.youtubeUrl, audioPath);
+      console.log(`[Worker] Downloading audio to ${audioBase}.*`);
+      audioPath = await downloadAudio(video.youtubeUrl, audioBase);
     }
+    const audioExt = path.extname(audioPath);
+    console.log(`[Worker] Audio file: ${audioPath}`);
 
     // Step 3: Process in 5-minute chunks
     const freshVideo = await getVideoById(videoId);
@@ -107,7 +113,7 @@ async function handleProcessVideo(data: JobData["process-video"]) {
 
       const chunkPath = path.join(
         tmpDir,
-        `chunk_${chunk.start}_${chunk.end}.webm`,
+        `chunk_${chunk.start}_${chunk.end}${audioExt}`,
       );
 
       console.log(`[Worker] Extracting chunk ${chunk.start}-${chunk.end}s`);

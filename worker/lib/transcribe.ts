@@ -17,8 +17,18 @@ export async function transcribeChunk(
 ): Promise<TranscriptSegment[]> {
   const fileBuffer = await readFile(filePath);
   const fileName = path.basename(filePath);
+  const ext = path.extname(filePath).toLowerCase();
+  const mimeTypes: Record<string, string> = {
+    ".webm": "audio/webm",
+    ".mp4": "audio/mp4",
+    ".m4a": "audio/mp4",
+    ".ogg": "audio/ogg",
+    ".opus": "audio/opus",
+    ".wav": "audio/wav",
+    ".mp3": "audio/mpeg",
+  };
 
-  const file = new File([fileBuffer], fileName, { type: "audio/webm" });
+  const file = new File([fileBuffer], fileName, { type: mimeTypes[ext] ?? "audio/webm" });
 
   const result = await withRetry(
     () =>

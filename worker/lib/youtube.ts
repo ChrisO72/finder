@@ -1,5 +1,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import youtubeDl from "youtube-dl-exec";
+import ffmpegPath from "ffmpeg-static";
 
 const exec = promisify(execFile);
 
@@ -14,21 +16,19 @@ export type VideoMetadata = {
 export async function fetchVideoMetadata(
   youtubeUrl: string,
 ): Promise<VideoMetadata> {
-  const { stdout } = await exec("yt-dlp", [
-    "--dump-json",
-    "--no-download",
-    youtubeUrl,
-  ], { maxBuffer: 50 * 1024 * 1024 });
-
-  const info = JSON.parse(stdout);
+  const info = (await youtubeDl(youtubeUrl, {
+    dumpJson: true,
+    skipDownload: true,
+  })) as Record<string, unknown>;
 
   return {
-    title: info.title ?? "Untitled",
-    channelTitle: info.uploader ?? info.channel ?? "Unknown",
-    thumbnailUrl: info.thumbnail ?? null,
-    durationSeconds: info.duration ?? 0,
+    title: (info.title as string) ?? "Untitled",
+    channelTitle:
+      (info.uploader as string) ?? (info.channel as string) ?? "Unknown",
+    thumbnailUrl: (info.thumbnail as string) ?? null,
+    durationSeconds: (info.duration as number) ?? 0,
     publishedAt: info.upload_date
-      ? `${info.upload_date.slice(0, 4)}-${info.upload_date.slice(4, 6)}-${info.upload_date.slice(6, 8)}`
+      ? `${(info.upload_date as string).slice(0, 4)}-${(info.upload_date as string).slice(4, 6)}-${(info.upload_date as string).slice(6, 8)}`
       : null,
   };
 }
@@ -37,14 +37,12 @@ export async function downloadAudio(
   youtubeUrl: string,
   outputPath: string,
 ): Promise<void> {
-  await exec("yt-dlp", [
-    "-x",
-    "--audio-format",
-    "m4a",
-    "-o",
-    outputPath,
-    youtubeUrl,
-  ]);
+  await youtubeDl.exec(youtubeUrl, {
+    extractAudio: true,
+    audioFormat: "m4a",
+    output: outputPath,
+    ffmpegLocation: ffmpegPath!,
+  });
 }
 
 export async function extractChunk(
@@ -53,7 +51,7 @@ export async function extractChunk(
   startSec: number,
   endSec: number,
 ): Promise<void> {
-  await exec("ffmpeg", [
+  await exec(ffmpegPath!, [
     "-y",
     "-i",
     inputPath,

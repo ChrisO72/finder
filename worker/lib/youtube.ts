@@ -19,6 +19,7 @@ export async function fetchVideoMetadata(
   const info = (await youtubeDl(youtubeUrl, {
     dumpJson: true,
     skipDownload: true,
+    jsRuntimes: "node",
   })) as Record<string, unknown>;
 
   return {
@@ -42,6 +43,7 @@ export async function downloadAudio(
     audioFormat: "m4a",
     output: outputPath,
     ffmpegLocation: ffmpegPath!,
+    jsRuntimes: "node",
   });
 }
 

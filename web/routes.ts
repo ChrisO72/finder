@@ -11,5 +11,6 @@ export default [
     index("routes/home.tsx"),
     route("videos", "routes/videos/index.tsx"),
     route("videos/:id", "routes/videos/video/video.tsx"),
+    route("settings", "routes/settings.tsx"),
   ]),
 ] satisfies RouteConfig;

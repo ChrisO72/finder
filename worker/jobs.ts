@@ -7,9 +7,11 @@ import {
   fetchVideoMetadata,
   downloadAudio,
   extractChunk,
+  setProxyUrl,
 } from "./lib/youtube";
 import { transcribeChunk } from "./lib/transcribe";
 import { getVideoById, updateVideo } from "../db/repositories/videos";
+import { getOrganizationById } from "../db/repositories/organizations";
 import { bulkInsertSegments, getSegmentsByVideoId } from "../db/repositories/segments";
 import { bulkInsertWindows } from "../db/repositories/windows";
 import { upsertTag, setVideoTags } from "../db/repositories/tags";
@@ -44,6 +46,9 @@ async function handleProcessVideo(data: JobData["process-video"]) {
     console.error(`[Worker] Video ${videoId} not found`);
     return;
   }
+
+  const org = await getOrganizationById(video.organizationId);
+  setProxyUrl(org?.webshareProxyUrl);
 
   const tmpDir = path.join(os.tmpdir(), "finder", String(videoId));
   await mkdir(tmpDir, { recursive: true });

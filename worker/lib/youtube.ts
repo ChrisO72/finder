@@ -5,11 +5,16 @@ import ffmpegPath from "ffmpeg-static";
 
 const exec = promisify(execFile);
 
+let _proxyUrl: string | undefined;
+
+export function setProxyUrl(url: string | null | undefined) {
+  _proxyUrl = url || undefined;
+}
+
 function proxyFlags(): Record<string, string | boolean> {
-  if (!process.env.WEBSHARE_PROXY_URL) return {};
-  return {
-    proxy: process.env.WEBSHARE_PROXY_URL,
-  };
+  const url = _proxyUrl ?? process.env.WEBSHARE_PROXY_URL;
+  if (!url) return {};
+  return { proxy: url };
 }
 
 export type VideoMetadata = {

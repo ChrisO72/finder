@@ -85,6 +85,9 @@ export default function Layout() {
               <SidebarItem href="/videos" current={pathname.startsWith("/videos")}>
                 <SidebarLabel>Videos</SidebarLabel>
               </SidebarItem>
+              <SidebarItem href="/settings" current={pathname.startsWith("/settings")}>
+                <SidebarLabel>Settings</SidebarLabel>
+              </SidebarItem>
             </SidebarSection>
           </SidebarBody>
           <SidebarFooter>

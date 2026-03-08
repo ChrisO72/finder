@@ -53,7 +53,7 @@ async function handleProcessVideo(data: JobData["process-video"]) {
   const tmpDir = path.join(os.tmpdir(), "finder", String(videoId));
   await mkdir(tmpDir, { recursive: true });
 
-  const audioPath = path.join(tmpDir, `${video.youtubeVideoId}.m4a`);
+  const audioPath = path.join(tmpDir, `${video.youtubeVideoId}.webm`);
 
   try {
     await updateVideo(videoId, { status: "processing" });
@@ -105,7 +105,7 @@ async function handleProcessVideo(data: JobData["process-video"]) {
 
       const chunkPath = path.join(
         tmpDir,
-        `chunk_${chunk.start}_${chunk.end}.m4a`,
+        `chunk_${chunk.start}_${chunk.end}.webm`,
       );
 
       console.log(`[Worker] Extracting chunk ${chunk.start}-${chunk.end}s`);

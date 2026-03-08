@@ -53,10 +53,7 @@ export async function downloadAudio(
 ): Promise<void> {
   const subprocess = youtubeDl.exec(youtubeUrl, {
     format: "bestaudio",
-    extractAudio: true,
-    audioFormat: "m4a",
     output: outputPath,
-    ffmpegLocation: ffmpegPath!,
     jsRuntimes: "node",
     newline: true,
     ...proxyFlags(),
@@ -71,6 +68,10 @@ export async function downloadAudio(
       lastLog = now;
       console.log(`[yt-dlp] ${line.trim()}`);
     }
+  });
+
+  subprocess.stderr?.on("data", (data: Buffer) => {
+    console.error(`[yt-dlp stderr] ${data.toString().trim()}`);
   });
 
   await subprocess;

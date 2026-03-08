@@ -18,7 +18,7 @@ export async function transcribeChunk(
   const fileBuffer = await readFile(filePath);
   const fileName = path.basename(filePath);
 
-  const file = new File([fileBuffer], fileName, { type: "audio/mp4" });
+  const file = new File([fileBuffer], fileName, { type: "audio/webm" });
 
   const result = await withRetry(
     () =>

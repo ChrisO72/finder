@@ -10,6 +10,6 @@ export default [
   layout("routes/layout.tsx", [
     index("routes/home.tsx"),
     route("videos", "routes/videos/index.tsx"),
-    route("videos/:id", "routes/videos/video.tsx"),
+    route("videos/:id", "routes/videos/video/video.tsx"),
   ]),
 ] satisfies RouteConfig;

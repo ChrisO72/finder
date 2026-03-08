@@ -17,6 +17,7 @@ declare global {
 import {
   ClockIcon,
   ArrowLeftIcon,
+  ArrowPathIcon,
   TrashIcon,
 } from "@heroicons/react/24/outline";
 import { MagnifyingGlassIcon } from "@heroicons/react/20/solid";
@@ -25,8 +26,12 @@ import { getUserById } from "~/db/repositories/users";
 import {
   getVideoByIdForOrg,
   softDeleteVideo,
+  updateVideo,
 } from "~/db/repositories/videos";
 import { getSegmentsByVideoId } from "~/db/repositories/segments";
+import { getTagsForVideo } from "~/db/repositories/tags";
+import { getTagColorClass } from "~/lib/tag-colors";
+import { defaultQueue } from "../../../worker/queues";
 import { Badge } from "~/components/ui-kit/badge";
 import { Button } from "~/components/ui-kit/button";
 import {
@@ -49,11 +54,13 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   if (!video) throw new Response("Not found", { status: 404 });
 
   const segments =
-    video.status === "ready" || video.status === "processing"
+    video.status === "ready" || video.status === "processing" || video.status === "failed"
       ? await getSegmentsByVideoId(video.id)
       : [];
 
-  return { video, segments };
+  const videoTags = video.status === "ready" ? await getTagsForVideo(video.id) : [];
+
+  return { video, segments, videoTags };
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
@@ -62,16 +69,27 @@ export async function action({ request, params }: Route.ActionArgs) {
   if (!user) throw new Response("Unauthorized", { status: 401 });
 
   const formData = await request.formData();
-  if (formData.get("intent") !== "delete") {
-    throw new Response("Bad request", { status: 400 });
-  }
+  const intent = formData.get("intent");
 
   const videoId = parseInt(params.id, 10);
   if (isNaN(videoId)) throw new Response("Not found", { status: 404 });
 
-  await softDeleteVideo(videoId, user.organizationId);
+  if (intent === "continue") {
+    const video = await getVideoByIdForOrg(videoId, user.organizationId);
+    if (!video || video.status !== "failed") {
+      throw new Response("Bad request", { status: 400 });
+    }
+    await updateVideo(videoId, { status: "pending", errorMessage: null });
+    await defaultQueue.add("process-video", { videoId });
+    return { continued: true };
+  }
 
-  return redirect("/videos");
+  if (intent === "delete") {
+    await softDeleteVideo(videoId, user.organizationId);
+    return redirect("/videos");
+  }
+
+  throw new Response("Bad request", { status: 400 });
 }
 
 type Segment = { id: number; startSeconds: number; endSeconds: number; text: string };
@@ -150,13 +168,15 @@ function highlightWords(text: string, query: string): React.ReactNode {
 }
 
 export default function VideoDetailPage() {
-  const { video, segments } = useLoaderData<typeof loader>();
+  const { video, segments, videoTags } = useLoaderData<typeof loader>();
   const [searchParams] = useSearchParams();
   const revalidator = useRevalidator();
   const fetcher = useFetcher();
   const playerRef = useRef<any>(null);
+  const videoContainerRef = useRef<HTMLDivElement>(null);
   const chunkRefs = useRef<Map<number, HTMLButtonElement>>(new Map());
   const [playerReady, setPlayerReady] = useState(false);
+  const [videoHeight, setVideoHeight] = useState<number | null>(null);
   const [activeChunkIdx, setActiveChunkIdx] = useState<number | null>(null);
   const [chunkWindow, setChunkWindow] = useState(10);
   const chunks = useMemo(
@@ -203,6 +223,16 @@ export default function VideoDetailPage() {
   const initialTime = parseInt(searchParams.get("t") ?? "0", 10);
   const isProcessing =
     video.status === "processing" || video.status === "pending";
+
+  useEffect(() => {
+    const el = videoContainerRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(([entry]) => {
+      setVideoHeight(entry.contentRect.height);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   // Poll while processing
   useEffect(() => {
@@ -319,9 +349,10 @@ export default function VideoDetailPage() {
       </Link>
 
       <div className="flex min-h-0 flex-1 flex-col gap-6">
-        {/* Player */}
-        <div className="shrink-0">
-          <div className="relative aspect-video max-w-2xl overflow-hidden rounded-lg bg-black">
+        {/* Player + Summary */}
+        <div className="flex shrink-0 gap-6">
+          <div className="min-w-0 flex-2">
+          <div ref={videoContainerRef} className="relative aspect-video overflow-hidden rounded-lg bg-black">
             <div id="yt-player" className="absolute inset-0 h-full w-full" />
           </div>
 
@@ -399,12 +430,56 @@ export default function VideoDetailPage() {
               </div>
             )}
 
-            {video.status === "failed" && video.errorMessage && (
-              <p className="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-500/10 dark:text-red-400">
-                {video.errorMessage}
-              </p>
+            {videoTags.length > 0 && (
+              <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                {videoTags.map((tag) => (
+                  <Link
+                    key={tag.id}
+                    to={`/?tag=${encodeURIComponent(tag.slug)}`}
+                    className={`rounded-md px-2 py-0.5 text-xs font-medium transition ${getTagColorClass(tag.name)}`}
+                  >
+                    {tag.name}
+                  </Link>
+                ))}
+              </div>
+            )}
+
+            {video.status === "failed" && (
+              <div className="mt-3 space-y-3">
+                {video.errorMessage && (
+                  <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-500/10 dark:text-red-400">
+                    {video.errorMessage}
+                  </p>
+                )}
+                <fetcher.Form method="post">
+                  <input type="hidden" name="intent" value="continue" />
+                  <Button
+                    type="submit"
+                    color="blue"
+                    disabled={fetcher.state !== "idle"}
+                  >
+                    <ArrowPathIcon className="size-4" />
+                    {fetcher.state !== "idle" ? "Resuming..." : "Continue processing"}
+                  </Button>
+                </fetcher.Form>
+              </div>
             )}
           </div>
+          </div>
+
+          {video.summary && (
+            <div
+              className="flex flex-1 flex-col"
+              style={videoHeight ? { maxHeight: videoHeight } : undefined}
+            >
+              <h2 className="mb-2 shrink-0 text-sm font-semibold text-zinc-900 dark:text-white">Summary</h2>
+              <div className="min-h-0 flex-1 overflow-y-auto rounded-lg bg-zinc-50 p-3 dark:bg-zinc-800/50">
+                <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">
+                  {video.summary}
+                </p>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Transcript */}

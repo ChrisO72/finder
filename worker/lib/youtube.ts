@@ -18,7 +18,7 @@ export async function fetchVideoMetadata(
     "--dump-json",
     "--no-download",
     youtubeUrl,
-  ]);
+  ], { maxBuffer: 50 * 1024 * 1024 });
 
   const info = JSON.parse(stdout);
 

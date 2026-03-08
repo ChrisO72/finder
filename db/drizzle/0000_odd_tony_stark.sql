@@ -1,3 +1,4 @@
+CREATE EXTENSION IF NOT EXISTS vector;--> statement-breakpoint
 CREATE TABLE "organizations" (
 	"id" integer PRIMARY KEY GENERATED ALWAYS AS IDENTITY (sequence name "organizations_id_seq" INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START WITH 1 CACHE 1),
 	"created_at" timestamp DEFAULT now() NOT NULL,
@@ -57,12 +58,25 @@ CREATE TABLE "videos" (
 	"error_message" text
 );
 --> statement-breakpoint
+CREATE TABLE "windows" (
+	"id" integer PRIMARY KEY GENERATED ALWAYS AS IDENTITY (sequence name "windows_id_seq" INCREMENT BY 1 MINVALUE 1 MAXVALUE 2147483647 START WITH 1 CACHE 1),
+	"video_id" integer NOT NULL,
+	"text" text NOT NULL,
+	"start_seconds" real NOT NULL,
+	"end_seconds" real NOT NULL,
+	"embedding" vector(1024),
+	"created_at" timestamp DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
 ALTER TABLE "refresh_tokens" ADD CONSTRAINT "refresh_tokens_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "segments" ADD CONSTRAINT "segments_video_id_videos_id_fk" FOREIGN KEY ("video_id") REFERENCES "public"."videos"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "users" ADD CONSTRAINT "users_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "videos" ADD CONSTRAINT "videos_organization_id_organizations_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organizations"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "windows" ADD CONSTRAINT "windows_video_id_videos_id_fk" FOREIGN KEY ("video_id") REFERENCES "public"."videos"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "refresh_tokens_user_id_idx" ON "refresh_tokens" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "segments_video_id_idx" ON "segments" USING btree ("video_id");--> statement-breakpoint
 CREATE INDEX "segments_search_idx" ON "segments" USING gin (to_tsvector('english', "text"));--> statement-breakpoint
 CREATE INDEX "videos_org_active_idx" ON "videos" USING btree ("organization_id") WHERE deleted_at IS NULL;--> statement-breakpoint
-CREATE INDEX "videos_youtube_video_id_idx" ON "videos" USING btree ("youtube_video_id");
+CREATE INDEX "videos_youtube_video_id_idx" ON "videos" USING btree ("youtube_video_id");--> statement-breakpoint
+CREATE INDEX "windows_video_id_idx" ON "windows" USING btree ("video_id");--> statement-breakpoint
+CREATE INDEX "windows_embedding_idx" ON "windows" USING hnsw ("embedding" vector_cosine_ops);

@@ -1,6 +1,7 @@
 import { Mistral } from "@mistralai/mistralai";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { withRetry } from "./retry";
 
 const client = new Mistral({ apiKey: process.env.MISTRAL_API_KEY! });
 
@@ -19,12 +20,16 @@ export async function transcribeChunk(
 
   const file = new File([fileBuffer], fileName, { type: "audio/mp4" });
 
-  const result = await client.audio.transcriptions.complete({
-    model: "voxtral-mini-latest",
-    file,
-    timestampGranularities: ["segment"],
-    language: "en",
-  });
+  const result = await withRetry(
+    () =>
+      client.audio.transcriptions.complete({
+        model: "voxtral-mini-latest",
+        file,
+        timestampGranularities: ["segment"],
+        language: "en",
+      }),
+    `transcribe ${fileName}`,
+  );
 
   if (!result.segments || result.segments.length === 0) {
     if (result.text && result.text.trim()) {

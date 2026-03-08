@@ -1,4 +1,4 @@
-import { customType, index, integer, pgTable, real, text, timestamp, varchar } from "drizzle-orm/pg-core";
+import { customType, index, integer, pgTable, primaryKey, real, text, timestamp, uniqueIndex, varchar } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
 const vector = customType<{ data: number[]; driverParam: string; config: { dimensions: number } }>({
@@ -80,6 +80,7 @@ export const videos = pgTable(
       .notNull()
       .default("pending"),
     errorMessage: text("error_message"),
+    summary: text(),
   },
   (table) => [
     index("videos_org_active_idx")
@@ -99,7 +100,6 @@ export const segments = pgTable(
     text: text().notNull(),
     startSeconds: real("start_seconds").notNull(),
     endSeconds: real("end_seconds").notNull(),
-    embedding: vector("embedding", { dimensions: 1024 }),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [
@@ -108,10 +108,60 @@ export const segments = pgTable(
       "gin",
       sql`to_tsvector('english', ${table.text})`,
     ),
-    index("segments_embedding_idx").using(
+  ],
+);
+
+export const windows = pgTable(
+  "windows",
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    videoId: integer("video_id")
+      .notNull()
+      .references(() => videos.id, { onDelete: "cascade" }),
+    text: text().notNull(),
+    startSeconds: real("start_seconds").notNull(),
+    endSeconds: real("end_seconds").notNull(),
+    embedding: vector("embedding", { dimensions: 1024 }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("windows_video_id_idx").on(table.videoId),
+    index("windows_embedding_idx").using(
       "hnsw",
       sql`${table.embedding} vector_cosine_ops`,
     ),
+  ],
+);
+
+export const tags = pgTable(
+  "tags",
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    ...timestamps,
+    name: varchar({ length: 100 }).notNull(),
+    slug: varchar({ length: 100 }).notNull(),
+    organizationId: integer("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+  },
+  (table) => [
+    uniqueIndex("tags_slug_org_idx").on(table.slug, table.organizationId),
+  ],
+);
+
+export const videoTags = pgTable(
+  "video_tags",
+  {
+    videoId: integer("video_id")
+      .notNull()
+      .references(() => videos.id, { onDelete: "cascade" }),
+    tagId: integer("tag_id")
+      .notNull()
+      .references(() => tags.id, { onDelete: "cascade" }),
+  },
+  (table) => [
+    primaryKey({ columns: [table.videoId, table.tagId] }),
+    index("video_tags_tag_id_idx").on(table.tagId),
   ],
 );
 
@@ -127,5 +177,14 @@ export type InsertVideo = typeof videos.$inferInsert;
 export type SelectSegment = typeof segments.$inferSelect;
 export type InsertSegment = typeof segments.$inferInsert;
 
+export type SelectWindow = typeof windows.$inferSelect;
+export type InsertWindow = typeof windows.$inferInsert;
+
 export type SelectRefreshToken = typeof refreshTokens.$inferSelect;
 export type InsertRefreshToken = typeof refreshTokens.$inferInsert;
+
+export type SelectTag = typeof tags.$inferSelect;
+export type InsertTag = typeof tags.$inferInsert;
+
+export type SelectVideoTag = typeof videoTags.$inferSelect;
+export type InsertVideoTag = typeof videoTags.$inferInsert;

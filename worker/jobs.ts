@@ -10,11 +10,12 @@ import {
 } from "./lib/youtube";
 import { transcribeChunk } from "./lib/transcribe";
 import { getVideoById, updateVideo } from "../db/repositories/videos";
-import {
-  bulkInsertSegments,
-  updateSegmentEmbeddings,
-} from "../db/repositories/segments";
+import { bulkInsertSegments, getSegmentsByVideoId } from "../db/repositories/segments";
+import { bulkInsertWindows } from "../db/repositories/windows";
+import { upsertTag, setVideoTags } from "../db/repositories/tags";
 import { embedTexts } from "./lib/embed";
+import { generateSummary } from "./lib/summarize";
+import { generateTags, slugify } from "./lib/tags";
 
 export type JobData = {
   "process-video": { videoId: number };
@@ -23,6 +24,8 @@ export type JobData = {
 export type JobName = keyof JobData;
 
 const CHUNK_SECONDS = 300; // 5 minutes
+const WINDOW_SECONDS = 60;
+const STEP_SECONDS = 30;
 
 export async function processJob(job: Job<JobData[JobName], void, JobName>) {
   console.log(`[Worker] Processing ${job.name}`, job.data);
@@ -106,19 +109,13 @@ async function handleProcessVideo(data: JobData["process-video"]) {
       const transcriptSegments = await transcribeChunk(chunkPath, chunk.start);
 
       if (transcriptSegments.length > 0) {
-        const inserted = await bulkInsertSegments(
+        await bulkInsertSegments(
           transcriptSegments.map((seg) => ({
             videoId,
             text: seg.text,
             startSeconds: seg.startSeconds,
             endSeconds: seg.endSeconds,
           })),
-        );
-
-        console.log(`[Worker] Embedding ${inserted.length} segments`);
-        const embeddings = await embedTexts(inserted.map((s) => s.text));
-        await updateSegmentEmbeddings(
-          inserted.map((s, i) => ({ id: s.id, embedding: embeddings[i] })),
         );
       }
 
@@ -127,6 +124,59 @@ async function handleProcessVideo(data: JobData["process-video"]) {
 
       // Clean up chunk file
       await rm(chunkPath, { force: true });
+    }
+
+    // Step 4: Build rolling windows and embed
+    console.log(`[Worker] Building rolling windows for video ${videoId}`);
+    const allSegments = await getSegmentsByVideoId(videoId);
+
+    const windowRows: Array<{ text: string; startSeconds: number; endSeconds: number }> = [];
+    for (let winStart = 0; winStart < duration; winStart += STEP_SECONDS) {
+      const winEnd = winStart + WINDOW_SECONDS;
+      const overlapping = allSegments.filter(
+        (s) => s.startSeconds < winEnd && s.endSeconds > winStart,
+      );
+      if (overlapping.length === 0) continue;
+      windowRows.push({
+        text: overlapping.map((s) => s.text).join(" "),
+        startSeconds: Math.max(winStart, overlapping[0].startSeconds),
+        endSeconds: Math.min(winEnd, overlapping[overlapping.length - 1].endSeconds),
+      });
+    }
+
+    if (windowRows.length > 0) {
+      console.log(`[Worker] Embedding ${windowRows.length} windows`);
+      const embeddings = await embedTexts(windowRows.map((w) => w.text));
+      await bulkInsertWindows(
+        windowRows.map((w, i) => ({
+          videoId,
+          text: w.text,
+          startSeconds: w.startSeconds,
+          endSeconds: w.endSeconds,
+          embedding: embeddings[i],
+        })),
+      );
+    }
+
+    // Step 5: Generate summary from full transcript
+    const fullTranscript = allSegments.map((s) => s.text).join(" ");
+    if (fullTranscript.trim()) {
+      console.log(`[Worker] Generating summary for video ${videoId}`);
+      const summary = await generateSummary(fullTranscript);
+      await updateVideo(videoId, { summary });
+
+      // Step 6: Generate tags from summary
+      console.log(`[Worker] Generating tags for video ${videoId}`);
+      const tagNames = await generateTags(summary);
+      const orgId = video.organizationId;
+      const tagRows = await Promise.all(
+        tagNames.map((name) => upsertTag(name, slugify(name), orgId)),
+      );
+      await setVideoTags(
+        videoId,
+        tagRows.map((t) => t.id),
+      );
+      console.log(`[Worker] Tagged video ${videoId} with: ${tagNames.join(", ")}`);
     }
 
     await updateVideo(videoId, { status: "ready" });
@@ -138,6 +188,6 @@ async function handleProcessVideo(data: JobData["process-video"]) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(`[Worker] Failed to process video ${videoId}:`, message);
     await updateVideo(videoId, { status: "failed", errorMessage: message });
-    await rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+    await rm(tmpDir, { recursive: true, force: true }).catch(() => { });
   }
 }

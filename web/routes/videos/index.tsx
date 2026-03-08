@@ -14,7 +14,6 @@ import {
   createVideo,
 } from "~/db/repositories/videos";
 import { Heading } from "~/components/ui-kit/heading";
-import { Badge } from "~/components/ui-kit/badge";
 import { AddVideoDialog } from "./AddVideoDialog";
 import { defaultQueue } from "../../../worker/queues";
 import type { Route } from "./+types/index";
@@ -106,12 +105,48 @@ function formatDuration(seconds: number | null): string {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
-const statusConfig = {
-  pending: { label: "Pending", color: "zinc" as const },
-  processing: { label: "Processing", color: "blue" as const },
-  ready: { label: "Ready", color: "green" as const },
-  failed: { label: "Failed", color: "red" as const },
-};
+function CircularProgress({ percent }: { percent: number }) {
+  const r = 18;
+  const circumference = 2 * Math.PI * r;
+  const offset = circumference * (1 - percent / 100);
+
+  return (
+    <svg className="size-16 drop-shadow-lg" viewBox="0 0 44 44">
+      <circle
+        cx="22"
+        cy="22"
+        r={r}
+        fill="none"
+        stroke="rgba(255,255,255,0.25)"
+        strokeWidth="2.5"
+      />
+      <circle
+        cx="22"
+        cy="22"
+        r={r}
+        fill="none"
+        stroke="white"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeDasharray={circumference}
+        strokeDashoffset={offset}
+        className="transition-all duration-500"
+        transform="rotate(-90 22 22)"
+      />
+      <text
+        x="22"
+        y="22"
+        textAnchor="middle"
+        dominantBaseline="central"
+        fill="white"
+        fontSize="11"
+        fontWeight="600"
+      >
+        {percent}%
+      </text>
+    </svg>
+  );
+}
 
 export default function VideosPage() {
   const { videos, page, totalPages, totalCount, hasProcessing } =
@@ -151,15 +186,15 @@ export default function VideosPage() {
         <>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {videos.map((video) => {
-              const cfg = statusConfig[video.status];
               const progress =
                 video.status === "processing" &&
-                video.durationSeconds &&
-                video.durationSeconds > 0
+                  video.durationSeconds &&
+                  video.durationSeconds > 0
                   ? Math.round(
-                      (video.processedSeconds / video.durationSeconds) * 100,
-                    )
+                    (video.processedSeconds / video.durationSeconds) * 100,
+                  )
                   : null;
+              const hasOverlay = video.status !== "ready";
 
               return (
                 <Link
@@ -176,37 +211,42 @@ export default function VideosPage() {
                       />
                     ) : (
                       <div className="flex aspect-video items-center justify-center bg-zinc-100 dark:bg-zinc-800">
-                        <PlayCircleIcon className="size-10 text-zinc-400" />
                       </div>
                     )}
-                    {video.durationSeconds && (
+                    {video.durationSeconds && !hasOverlay && (
                       <span className="absolute bottom-2 right-2 rounded bg-black/70 px-1.5 py-0.5 text-xs font-medium text-white">
                         {formatDuration(video.durationSeconds)}
                       </span>
                     )}
+                    {video.status === "processing" && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                        <CircularProgress percent={progress ?? 0} />
+                      </div>
+                    )}
+                    {video.status === "pending" && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                        <ClockIcon className="size-8 text-white/70" />
+                      </div>
+                    )}
+                    {video.status === "failed" && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/60">
+                        <div className="flex flex-col items-center gap-1">
+                          <ExclamationTriangleIcon className="size-8 text-red-400" />
+                          <span className="text-xs font-semibold text-red-300">
+                            Failed
+                          </span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                   <div className="p-3">
                     <p className="truncate text-sm font-medium text-zinc-900 group-hover:text-blue-600 dark:text-white dark:group-hover:text-blue-400">
-                      {video.title ?? "Processing..."}
+                      {video.title ?? "Processing…"}
                     </p>
-                    <div className="mt-1.5 flex items-center gap-2">
-                      {video.channelTitle && (
-                        <span className="truncate text-xs text-zinc-500">
-                          {video.channelTitle}
-                        </span>
-                      )}
-                      <Badge color={cfg.color}>
-                        {cfg.label}
-                        {progress !== null && ` ${progress}%`}
-                      </Badge>
-                    </div>
-                    {video.status === "processing" && progress !== null && (
-                      <div className="mt-2 h-1 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-700">
-                        <div
-                          className="h-full rounded-full bg-blue-500 transition-all duration-500"
-                          style={{ width: `${progress}%` }}
-                        />
-                      </div>
+                    {video.channelTitle && (
+                      <span className="mt-1 block truncate text-xs text-zinc-500 dark:text-zinc-400">
+                        {video.channelTitle}
+                      </span>
                     )}
                     {video.status === "failed" && video.errorMessage && (
                       <p className="mt-1.5 flex items-center gap-1 text-xs text-red-600 dark:text-red-400">

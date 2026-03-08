@@ -1,17 +1,17 @@
 import { Form, Link, useLoaderData, useNavigation } from "react-router";
 import { MagnifyingGlassIcon, XMarkIcon } from "@heroicons/react/20/solid";
-import { PlayCircleIcon, ClockIcon, TagIcon } from "@heroicons/react/24/outline";
+import { PlayCircleIcon, ClockIcon, TagIcon, DocumentTextIcon } from "@heroicons/react/24/outline";
 import { requireAuth } from "~/lib/session.server";
 import { getUserById } from "~/db/repositories/users";
 import {
   searchSegments,
-  semanticSearchSegments,
-  type SearchResult,
-  type SemanticResult,
+  hybridSearch,
+  type HybridResult,
 } from "~/db/repositories/segments";
 import {
   getTagsByOrganization,
   getVideosByTag,
+  getTagsForVideoIds,
   type TagWithCount,
 } from "~/db/repositories/tags";
 import { Heading } from "~/components/ui-kit/heading";
@@ -25,7 +25,7 @@ export function meta({}: Route.MetaArgs) {
   ];
 }
 
-type SearchMode = "semantic" | "keyword";
+type SearchMode = "hybrid" | "exact";
 
 export async function loader({ request }: Route.LoaderArgs) {
   const auth = await requireAuth(request);
@@ -35,22 +35,35 @@ export async function loader({ request }: Route.LoaderArgs) {
   const url = new URL(request.url);
   const query = url.searchParams.get("q")?.trim() ?? "";
   const mode: SearchMode =
-    url.searchParams.get("mode") === "keyword" ? "keyword" : "semantic";
+    url.searchParams.get("mode") === "exact" ? "exact" : "hybrid";
   const tagSlug = url.searchParams.get("tag")?.trim() ?? "";
 
-  let keywordResults: SearchResult[] = [];
-  let semanticResults: SemanticResult[] = [];
+  let results: HybridResult[] = [];
 
   if (query) {
-    if (mode === "keyword") {
-      keywordResults = await searchSegments(
+    if (mode === "exact") {
+      const kwResults = await searchSegments(
         query,
         user.organizationId,
         20,
         tagSlug || undefined,
       );
+      results = kwResults.map((r, i) => ({
+        videoId: r.videoId,
+        text: r.text,
+        headline: r.headline,
+        startSeconds: r.startSeconds,
+        endSeconds: r.endSeconds,
+        score: r.rank,
+        videoTitle: r.videoTitle,
+        youtubeVideoId: r.youtubeVideoId,
+        thumbnailUrl: r.thumbnailUrl,
+        channelTitle: r.channelTitle,
+        source: "keyword" as const,
+        segmentId: r.segmentId,
+      }));
     } else {
-      semanticResults = await semanticSearchSegments(
+      results = await hybridSearch(
         query,
         user.organizationId,
         20,
@@ -60,6 +73,25 @@ export async function loader({ request }: Route.LoaderArgs) {
   }
 
   const allTags = await getTagsByOrganization(user.organizationId);
+
+  let videoTagsMap: Record<number, { id: number; name: string; slug: string }[]> = {};
+  let resultTags: { id: number; name: string; slug: string }[] = [];
+
+  if (results.length > 0) {
+    const videoIds = [...new Set(results.map((r) => r.videoId))];
+    videoTagsMap = await getTagsForVideoIds(videoIds);
+
+    const seen = new Set<number>();
+    for (const tags of Object.values(videoTagsMap)) {
+      for (const t of tags) {
+        if (!seen.has(t.id)) {
+          seen.add(t.id);
+          resultTags.push(t);
+        }
+      }
+    }
+    resultTags.sort((a, b) => a.name.localeCompare(b.name));
+  }
 
   type TagVideo = {
     id: number;
@@ -80,12 +112,13 @@ export async function loader({ request }: Route.LoaderArgs) {
   return {
     query,
     mode,
-    keywordResults,
-    semanticResults,
+    results,
     allTags,
     tagSlug,
     tagVideos,
     activeTag,
+    videoTagsMap,
+    resultTags,
   };
 }
 
@@ -103,30 +136,30 @@ function formatDuration(seconds: number | null): string {
   return formatTimestamp(seconds);
 }
 
-function formatRange(start: number, end: number): string {
-  return `${formatTimestamp(start)} – ${formatTimestamp(end)}`;
-}
-
 export default function Home() {
   const {
     query,
     mode,
-    keywordResults,
-    semanticResults,
+    results,
     allTags,
     tagSlug,
     tagVideos,
     activeTag,
+    videoTagsMap,
+    resultTags,
   } = useLoaderData<typeof loader>();
   const navigation = useNavigation();
   const isSearching =
     navigation.state === "loading" &&
     new URLSearchParams(navigation.location?.search).has("q");
 
-  const hasResults =
-    mode === "keyword" ? keywordResults.length > 0 : semanticResults.length > 0;
-  const resultCount =
-    mode === "keyword" ? keywordResults.length : semanticResults.length;
+  const hasResults = results.length > 0;
+  const resultCount = results.length;
+
+  const exactToggleParams = new URLSearchParams();
+  if (query) exactToggleParams.set("q", query);
+  if (tagSlug) exactToggleParams.set("tag", tagSlug);
+  if (mode !== "exact") exactToggleParams.set("mode", "exact");
 
   return (
     <div className="mx-auto max-w-3xl py-8">
@@ -137,34 +170,43 @@ export default function Home() {
         </p>
       </div>
 
-      <Form method="get" className="relative mb-4">
+      <Form method="get" className="relative mb-1.5">
         <MagnifyingGlassIcon className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-zinc-400" />
         <input
           type="search"
           name="q"
           defaultValue={query}
-          placeholder="Search transcripts..."
+          placeholder="Search videos, topics, keywords, questions..."
           className="w-full rounded-xl border border-zinc-200 bg-white py-3 pl-12 pr-4 text-base shadow-sm outline-none transition placeholder:text-zinc-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder:text-zinc-500 dark:focus:border-blue-400"
         />
-        <input type="hidden" name="mode" value={mode} />
+        {mode === "exact" && <input type="hidden" name="mode" value="exact" />}
         {tagSlug && <input type="hidden" name="tag" value={tagSlug} />}
       </Form>
 
-      <div className="mb-10 flex items-center gap-1 rounded-lg bg-zinc-100 p-1 dark:bg-zinc-800">
-        <ModeLink
-          label="Semantic"
-          value="semantic"
-          active={mode === "semantic"}
-          query={query}
-          tagSlug={tagSlug}
-        />
-        <ModeLink
-          label="Keyword"
-          value="keyword"
-          active={mode === "keyword"}
-          query={query}
-          tagSlug={tagSlug}
-        />
+      <div className="mb-6 flex justify-end">
+        <Link
+          to={`/?${exactToggleParams.toString()}`}
+          className={`inline-flex items-center gap-1.5 rounded px-2 py-1 text-xs transition ${
+            mode === "exact"
+              ? "text-blue-700 dark:text-blue-400"
+              : "text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300"
+          }`}
+        >
+          <span
+            className={`flex size-3.5 items-center justify-center rounded border transition ${
+              mode === "exact"
+                ? "border-blue-500 bg-blue-500 dark:border-blue-400 dark:bg-blue-400"
+                : "border-zinc-300 dark:border-zinc-600"
+            }`}
+          >
+            {mode === "exact" && (
+              <svg className="size-2.5 text-white" viewBox="0 0 12 12" fill="none">
+                <path d="M2.5 6l2.5 2.5 4.5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            )}
+          </span>
+          Exact match only
+        </Link>
       </div>
 
       {tagSlug && activeTag && (
@@ -203,62 +245,101 @@ export default function Home() {
             {query}&rdquo;
           </p>
 
-          {mode === "keyword"
-            ? keywordResults.map((r) => (
-                <Link
-                  key={r.segmentId}
-                  to={`/videos/${r.videoId}?t=${Math.floor(r.startSeconds)}&q=${encodeURIComponent(query)}&mode=keyword&sid=${r.segmentId}`}
-                  className="block rounded-lg border border-zinc-200 p-4 transition hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:border-zinc-600 dark:hover:bg-zinc-800/50"
-                >
-                  <div className="mb-1 flex items-center gap-2">
-                    <span className="text-sm font-medium text-zinc-900 dark:text-white">
-                      {r.videoTitle ?? "Untitled"}
+          {resultTags.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                Filter by tag:
+              </span>
+              {resultTags.map((tag) => {
+                const isActive = tagSlug === tag.slug;
+                const params = new URLSearchParams();
+                params.set("q", query);
+                if (mode === "exact") params.set("mode", "exact");
+                if (!isActive) params.set("tag", tag.slug);
+                return (
+                  <Link
+                    key={tag.id}
+                    to={`/?${params.toString()}`}
+                    className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium transition ${
+                      isActive
+                        ? `ring-2 ring-blue-500 dark:ring-blue-400 ${getTagColorClass(tag.name)}`
+                        : getTagColorClass(tag.name)
+                    }`}
+                  >
+                    {tag.name}
+                    {isActive && <XMarkIcon className="size-3" />}
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+
+          {results.map((r, i) => {
+            const isSummaryResult = r.segmentId === null && r.startSeconds === 0 && r.endSeconds === 0;
+            const linkUrl = isSummaryResult
+              ? `/videos/${r.videoId}?q=${encodeURIComponent(query)}`
+              : r.segmentId
+                ? `/videos/${r.videoId}?t=${Math.floor(r.startSeconds)}&q=${encodeURIComponent(query)}&mode=keyword&sid=${r.segmentId}`
+                : `/videos/${r.videoId}?t=${Math.floor(r.startSeconds)}&q=${encodeURIComponent(query)}&mode=semantic&from=${Math.floor(r.startSeconds)}&to=${Math.ceil(r.endSeconds)}`;
+
+            const tags = videoTagsMap[r.videoId] ?? [];
+            const visibleTags = tags.slice(0, 2);
+            const overflowCount = tags.length - visibleTags.length;
+            return (
+              <Link
+                key={`${r.videoId}-${r.startSeconds}-${i}`}
+                to={linkUrl}
+                className="block rounded-lg border border-zinc-200 p-4 transition hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:border-zinc-600 dark:hover:bg-zinc-800/50"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="truncate text-sm font-medium text-zinc-900 dark:text-white">
+                    {r.videoTitle ?? "Untitled"}
+                  </span>
+                  {visibleTags.length > 0 && (
+                    <span className="shrink-0 truncate text-xs text-zinc-400 dark:text-zinc-500">
+                      {visibleTags.map((t) => t.name).join(", ")}
+                      {overflowCount > 0 && ` +${overflowCount}`}
                     </span>
-                    {r.channelTitle && (
-                      <span className="text-xs text-zinc-500">
-                        {r.channelTitle}
+                  )}
+                </div>
+                <p className="mb-2 text-xs text-zinc-500 dark:text-zinc-400">
+                  {r.channelTitle ?? "\u00A0"}
+                </p>
+                <div className="mb-1.5 space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="w-16 shrink-0 text-xs text-zinc-400 dark:text-zinc-500">Source</span>
+                    {isSummaryResult ? (
+                      <span className="inline-flex items-center gap-1 rounded bg-teal-50 px-2 py-0.5 text-xs font-medium text-teal-700 dark:bg-teal-500/10 dark:text-teal-400">
+                        <DocumentTextIcon className="size-3.5" />
+                        Summary
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 rounded bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-500/10 dark:text-blue-400">
+                        <PlayCircleIcon className="size-3.5" />
+                        {r.source === "keyword"
+                          ? formatTimestamp(r.startSeconds)
+                          : `${formatTimestamp(r.startSeconds)} – ${formatTimestamp(r.endSeconds)}`}
                       </span>
                     )}
                   </div>
-                  <div className="flex items-start gap-3">
-                    <span className="mt-0.5 inline-flex shrink-0 items-center gap-1 rounded bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-500/10 dark:text-blue-400">
-                      <PlayCircleIcon className="size-3.5" />
-                      {formatTimestamp(r.startSeconds)}
-                    </span>
-                    <p
-                      className="text-sm text-zinc-600 dark:text-zinc-300 [&_mark]:rounded [&_mark]:bg-yellow-200 [&_mark]:px-0.5 dark:[&_mark]:bg-yellow-500/30 dark:[&_mark]:text-yellow-200"
-                      dangerouslySetInnerHTML={{ __html: r.headline }}
-                    />
+                  <div className="flex items-center gap-2">
+                    <span className="w-16 shrink-0 text-xs text-zinc-400 dark:text-zinc-500">Match</span>
+                    <SourceBadges source={r.source} />
                   </div>
-                </Link>
-              ))
-            : semanticResults.map((result, i) => (
-                <Link
-                  key={`${result.videoId}-${result.startSeconds}-${i}`}
-                  to={`/videos/${result.videoId}?t=${Math.floor(result.startSeconds)}&q=${encodeURIComponent(query)}&mode=semantic&from=${Math.floor(result.startSeconds)}&to=${Math.ceil(result.endSeconds)}`}
-                  className="block rounded-lg border border-zinc-200 p-4 transition hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:border-zinc-600 dark:hover:bg-zinc-800/50"
-                >
-                  <div className="mb-1 flex items-center gap-2">
-                    <span className="text-sm font-medium text-zinc-900 dark:text-white">
-                      {result.videoTitle ?? "Untitled"}
-                    </span>
-                    {result.channelTitle && (
-                      <span className="text-xs text-zinc-500">
-                        {result.channelTitle}
-                      </span>
-                    )}
-                  </div>
-                  <div className="mb-2 flex items-center gap-2">
-                    <span className="inline-flex shrink-0 items-center gap-1 rounded bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-500/10 dark:text-blue-400">
-                      <PlayCircleIcon className="size-3.5" />
-                      {formatRange(result.startSeconds, result.endSeconds)}
-                    </span>
-                  </div>
+                </div>
+                {r.headline ? (
+                  <p
+                    className="line-clamp-3 text-sm text-zinc-600 dark:text-zinc-300 [&_mark]:rounded [&_mark]:bg-yellow-200 [&_mark]:px-0.5 dark:[&_mark]:bg-yellow-500/30 dark:[&_mark]:text-yellow-200"
+                    dangerouslySetInnerHTML={{ __html: r.headline }}
+                  />
+                ) : (
                   <p className="line-clamp-3 text-sm text-zinc-600 dark:text-zinc-300">
-                    {result.text}
+                    {r.text}
                   </p>
-                </Link>
-              ))}
+                )}
+              </Link>
+            );
+          })}
         </div>
       )}
 
@@ -357,34 +438,19 @@ export default function Home() {
   );
 }
 
-function ModeLink({
-  label,
-  value,
-  active,
-  query,
-  tagSlug,
-}: {
-  label: string;
-  value: string;
-  active: boolean;
-  query: string;
-  tagSlug?: string;
-}) {
-  const params = new URLSearchParams();
-  if (query) params.set("q", query);
-  params.set("mode", value);
-  if (tagSlug) params.set("tag", tagSlug);
-
+function SourceBadges({ source }: { source: "keyword" | "semantic" | "both" }) {
   return (
-    <Link
-      to={`/?${params.toString()}`}
-      className={`flex-1 rounded-md px-3 py-1.5 text-center text-sm font-medium transition ${
-        active
-          ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-700 dark:text-white"
-          : "text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
-      }`}
-    >
-      {label}
-    </Link>
+    <span className="flex items-center gap-1">
+      {(source === "keyword" || source === "both") && (
+        <span className="rounded px-1.5 py-0.5 text-xs font-medium bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">
+          Keyword
+        </span>
+      )}
+      {(source === "semantic" || source === "both") && (
+        <span className="rounded px-1.5 py-0.5 text-xs font-medium bg-purple-50 text-purple-700 dark:bg-purple-500/10 dark:text-purple-400">
+          Semantic
+        </span>
+      )}
+    </span>
   );
 }

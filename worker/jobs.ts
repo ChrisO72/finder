@@ -163,7 +163,10 @@ async function handleProcessVideo(data: JobData["process-video"]) {
     if (fullTranscript.trim()) {
       console.log(`[Worker] Generating summary for video ${videoId}`);
       const summary = await generateSummary(fullTranscript);
-      await updateVideo(videoId, { summary });
+
+      console.log(`[Worker] Embedding summary for video ${videoId}`);
+      const [summaryEmbedding] = await embedTexts([summary]);
+      await updateVideo(videoId, { summary, summaryEmbedding });
 
       // Step 6: Generate tags from summary
       console.log(`[Worker] Generating tags for video ${videoId}`);

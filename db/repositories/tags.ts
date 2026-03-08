@@ -109,6 +109,32 @@ export async function getVideosByTag(tagSlug: string, organizationId: number) {
     );
 }
 
+export async function getTagsForVideoIds(
+  videoIds: number[],
+): Promise<Record<number, { id: number; name: string; slug: string }[]>> {
+  if (videoIds.length === 0) return {};
+  const rows = await db
+    .select({
+      videoId: videoTags.videoId,
+      id: tags.id,
+      name: tags.name,
+      slug: tags.slug,
+    })
+    .from(videoTags)
+    .innerJoin(tags, eq(videoTags.tagId, tags.id))
+    .where(inArray(videoTags.videoId, videoIds));
+
+  const map: Record<number, { id: number; name: string; slug: string }[]> = {};
+  for (const row of rows) {
+    (map[row.videoId] ??= []).push({
+      id: row.id,
+      name: row.name,
+      slug: row.slug,
+    });
+  }
+  return map;
+}
+
 export async function getVideoIdsForTag(
   tagSlug: string,
   organizationId: number,

@@ -81,12 +81,21 @@ export const videos = pgTable(
       .default("pending"),
     errorMessage: text("error_message"),
     summary: text(),
+    summaryEmbedding: vector("summary_embedding", { dimensions: 1024 }),
   },
   (table) => [
     index("videos_org_active_idx")
       .on(table.organizationId)
       .where(sql`deleted_at IS NULL`),
     index("videos_youtube_video_id_idx").on(table.youtubeVideoId),
+    index("videos_summary_search_idx").using(
+      "gin",
+      sql`to_tsvector('english', ${table.summary})`,
+    ),
+    index("videos_summary_embedding_idx").using(
+      "hnsw",
+      sql`${table.summaryEmbedding} vector_cosine_ops`,
+    ),
   ],
 );
 

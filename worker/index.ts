@@ -3,7 +3,12 @@ import { redisConnection } from "./redis";
 import { processJob } from "./jobs";
 import { startScheduler } from "./scheduler";
 
-const worker = new Worker("default", processJob, { connection: redisConnection });
+const worker = new Worker("default", processJob, {
+  connection: redisConnection,
+  lockDuration: 600_000,
+  lockRenewTime: 60_000,
+  stalledInterval: 600_000,
+});
 
 startScheduler();
 

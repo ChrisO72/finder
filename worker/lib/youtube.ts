@@ -46,14 +46,28 @@ export async function downloadAudio(
   youtubeUrl: string,
   outputPath: string,
 ): Promise<void> {
-  await youtubeDl.exec(youtubeUrl, {
+  const subprocess = youtubeDl.exec(youtubeUrl, {
     extractAudio: true,
     audioFormat: "m4a",
     output: outputPath,
     ffmpegLocation: ffmpegPath!,
     jsRuntimes: "node",
+    newline: true,
     ...proxyFlags(),
   });
+
+  let lastLog = 0;
+  subprocess.stdout?.on("data", (data: Buffer) => {
+    for (const line of data.toString().split("\n")) {
+      if (!line.includes("[download]")) continue;
+      const now = Date.now();
+      if (now - lastLog < 10_000) continue;
+      lastLog = now;
+      console.log(`[yt-dlp] ${line.trim()}`);
+    }
+  });
+
+  await subprocess;
 }
 
 export async function extractChunk(

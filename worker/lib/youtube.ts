@@ -81,7 +81,7 @@ export async function downloadAudio(
   const outputTemplate = path.join(dir, `${stem}.%(ext)s`);
 
   const subprocess = youtubeDl.exec(youtubeUrl, {
-    format: "bestaudio/best",
+    format: "bestaudio/worst",
     output: outputTemplate,
     jsRuntimes: "node",
     newline: true,

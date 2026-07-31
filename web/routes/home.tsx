@@ -1,13 +1,9 @@
-import { Form, Link, useLoaderData, useNavigation } from "react-router";
+import { Form, Link, useNavigation } from "react-router";
 import { MagnifyingGlassIcon, XMarkIcon } from "@heroicons/react/20/solid";
 import { PlayCircleIcon, ClockIcon, TagIcon, DocumentTextIcon } from "@heroicons/react/24/outline";
-import { requireAuth } from "~/lib/session.server";
-import { getUserById } from "~/db/repositories/users";
-import {
-  searchSegments,
-  hybridSearch,
-  type HybridResult,
-} from "~/db/repositories/segments";
+import { getAuthenticatedUser } from "~/lib/session.server";
+import { searchSegments } from "~/db/repositories/segments";
+import { hybridSearch, type HybridResult } from "~/lib/search.server";
 import {
   getTagsByOrganization,
   getVideosByTag,
@@ -18,7 +14,7 @@ import { Heading } from "~/components/ui-kit/heading";
 import { getTagColorClass } from "~/lib/tag-colors";
 import type { Route } from "./+types/home";
 
-export function meta({ }: Route.MetaArgs) {
+export function meta() {
   return [
     { title: "Finder" },
     { name: "description", content: "Search across your video library" },
@@ -27,28 +23,20 @@ export function meta({ }: Route.MetaArgs) {
 
 type SearchMode = "hybrid" | "exact";
 
-export async function loader({ request }: Route.LoaderArgs) {
-  const auth = await requireAuth(request);
-  const user = await getUserById(auth.userId);
-  if (!user) throw new Response("Unauthorized", { status: 401 });
+export async function loader({ request, context }: Route.LoaderArgs) {
+  const user = getAuthenticatedUser(context);
 
   const url = new URL(request.url);
   const query = url.searchParams.get("q")?.trim() ?? "";
-  const mode: SearchMode =
-    url.searchParams.get("mode") === "exact" ? "exact" : "hybrid";
+  const mode: SearchMode = url.searchParams.get("mode") === "exact" ? "exact" : "hybrid";
   const tagSlug = url.searchParams.get("tag")?.trim() ?? "";
 
   let results: HybridResult[] = [];
 
   if (query) {
     if (mode === "exact") {
-      const kwResults = await searchSegments(
-        query,
-        user.organizationId,
-        20,
-        tagSlug || undefined,
-      );
-      results = kwResults.map((r, i) => ({
+      const kwResults = await searchSegments(query, user.organizationId, 20, tagSlug || undefined);
+      results = kwResults.map((r) => ({
         videoId: r.videoId,
         text: r.text,
         headline: r.headline,
@@ -63,19 +51,14 @@ export async function loader({ request }: Route.LoaderArgs) {
         segmentId: r.segmentId,
       }));
     } else {
-      results = await hybridSearch(
-        query,
-        user.organizationId,
-        20,
-        tagSlug || undefined,
-      );
+      results = await hybridSearch(query, user.organizationId, 20, tagSlug || undefined);
     }
   }
 
   const allTags = await getTagsByOrganization(user.organizationId);
 
   let videoTagsMap: Record<number, { id: number; name: string; slug: string }[]> = {};
-  let resultTags: { id: number; name: string; slug: string }[] = [];
+  const resultTags: { id: number; name: string; slug: string }[] = [];
 
   if (results.length > 0) {
     const videoIds = [...new Set(results.map((r) => r.videoId))];
@@ -126,8 +109,7 @@ function formatTimestamp(seconds: number): string {
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
   const s = Math.floor(seconds % 60);
-  if (h > 0)
-    return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
@@ -136,22 +118,12 @@ function formatDuration(seconds: number | null): string {
   return formatTimestamp(seconds);
 }
 
-export default function Home() {
-  const {
-    query,
-    mode,
-    results,
-    allTags,
-    tagSlug,
-    tagVideos,
-    activeTag,
-    videoTagsMap,
-    resultTags,
-  } = useLoaderData<typeof loader>();
+export default function Home({ loaderData }: Route.ComponentProps) {
+  const { query, mode, results, allTags, tagSlug, tagVideos, activeTag, videoTagsMap, resultTags } =
+    loaderData;
   const navigation = useNavigation();
   const isSearching =
-    navigation.state === "loading" &&
-    new URLSearchParams(navigation.location?.search).has("q");
+    navigation.state === "loading" && new URLSearchParams(navigation.location?.search).has("q");
 
   const hasResults = results.length > 0;
   const resultCount = results.length;
@@ -164,20 +136,20 @@ export default function Home() {
   return (
     <div className="mx-auto max-w-3xl py-8">
       <div className="mb-10 text-center">
-        <Heading className="text-3xl! mb-2">Search your videos</Heading>
+        <Heading className="mb-2 text-3xl!">Search your videos</Heading>
         <p className="text-zinc-500 dark:text-zinc-400">
           Find any moment across your entire library
         </p>
       </div>
 
       <Form method="get" className="relative mb-1.5">
-        <MagnifyingGlassIcon className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-zinc-400" />
+        <MagnifyingGlassIcon className="pointer-events-none absolute top-1/2 left-4 size-5 -translate-y-1/2 text-zinc-400" />
         <input
           type="search"
           name="q"
           defaultValue={query}
           placeholder="Search videos, topics, keywords, questions..."
-          className="w-full rounded-xl border border-zinc-200 bg-white py-3 pl-12 pr-4 text-base shadow-sm outline-none transition placeholder:text-zinc-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder:text-zinc-500 dark:focus:border-blue-400"
+          className="w-full rounded-xl border border-zinc-200 bg-white py-3 pr-4 pl-12 text-base shadow-sm transition outline-none placeholder:text-zinc-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white dark:placeholder:text-zinc-500 dark:focus:border-blue-400"
         />
         {mode === "exact" && <input type="hidden" name="mode" value="exact" />}
         {tagSlug && <input type="hidden" name="tag" value={tagSlug} />}
@@ -186,20 +158,28 @@ export default function Home() {
       <div className="mb-6 flex justify-end">
         <Link
           to={`/?${exactToggleParams.toString()}`}
-          className={`inline-flex items-center gap-1.5 rounded px-2 py-1 text-xs transition ${mode === "exact"
-            ? "text-blue-700 dark:text-blue-400"
-            : "text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300"
-            }`}
+          className={`inline-flex items-center gap-1.5 rounded px-2 py-1 text-xs transition ${
+            mode === "exact"
+              ? "text-blue-700 dark:text-blue-400"
+              : "text-zinc-400 hover:text-zinc-600 dark:text-zinc-500 dark:hover:text-zinc-300"
+          }`}
         >
           <span
-            className={`flex size-3.5 items-center justify-center rounded border transition ${mode === "exact"
-              ? "border-blue-500 bg-blue-500 dark:border-blue-400 dark:bg-blue-400"
-              : "border-zinc-300 dark:border-zinc-600"
-              }`}
+            className={`flex size-3.5 items-center justify-center rounded border transition ${
+              mode === "exact"
+                ? "border-blue-500 bg-blue-500 dark:border-blue-400 dark:bg-blue-400"
+                : "border-zinc-300 dark:border-zinc-600"
+            }`}
           >
             {mode === "exact" && (
               <svg className="size-2.5 text-white" viewBox="0 0 12 12" fill="none">
-                <path d="M2.5 6l2.5 2.5 4.5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                <path
+                  d="M2.5 6l2.5 2.5 4.5-5"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
               </svg>
             )}
           </span>
@@ -209,10 +189,10 @@ export default function Home() {
 
       {tagSlug && activeTag && (
         <div className="mb-6 flex items-center gap-2">
-          <span className="text-sm text-zinc-600 dark:text-zinc-300">
-            Filtering by
-          </span>
-          <span className={`inline-flex items-center gap-1 rounded-lg px-3 py-1 text-sm font-medium ${getTagColorClass(activeTag.name)}`}>
+          <span className="text-sm text-zinc-600 dark:text-zinc-300">Filtering by</span>
+          <span
+            className={`inline-flex items-center gap-1 rounded-lg px-3 py-1 text-sm font-medium ${getTagColorClass(activeTag.name)}`}
+          >
             {activeTag.name}
             <Link
               to={query ? `/?q=${encodeURIComponent(query)}&mode=${mode}` : "/"}
@@ -224,15 +204,11 @@ export default function Home() {
         </div>
       )}
 
-      {isSearching && (
-        <div className="py-12 text-center text-zinc-500">Searching...</div>
-      )}
+      {isSearching && <div className="py-12 text-center text-zinc-500">Searching...</div>}
 
       {!isSearching && query && !hasResults && (
         <div className="py-12 text-center">
-          <p className="text-zinc-500 dark:text-zinc-400">
-            No results for &ldquo;{query}&rdquo;
-          </p>
+          <p className="text-zinc-500 dark:text-zinc-400">No results for &ldquo;{query}&rdquo;</p>
         </div>
       )}
 
@@ -248,7 +224,7 @@ export default function Home() {
               <span className="shrink-0 text-xs font-medium text-zinc-500 dark:text-zinc-400">
                 Filter by tag:
               </span>
-              <div className="flex items-center gap-1.5 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <div className="flex [scrollbar-width:none] items-center gap-1.5 overflow-x-auto [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
                 {resultTags.map((tag) => {
                   const isActive = tagSlug === tag.slug;
                   const params = new URLSearchParams();
@@ -275,7 +251,8 @@ export default function Home() {
           )}
 
           {results.map((r, i) => {
-            const isSummaryResult = r.segmentId === null && r.startSeconds === 0 && r.endSeconds === 0;
+            const isSummaryResult =
+              r.segmentId === null && r.startSeconds === 0 && r.endSeconds === 0;
             const linkUrl = isSummaryResult
               ? `/videos/${r.videoId}?q=${encodeURIComponent(query)}`
               : r.segmentId
@@ -295,14 +272,14 @@ export default function Home() {
                   <img
                     src={r.thumbnailUrl}
                     alt=""
-                    className="hidden sm:block w-44 shrink-0 object-cover"
+                    className="hidden w-44 shrink-0 object-cover sm:block"
                   />
                 ) : (
-                  <div className="hidden sm:flex w-44 shrink-0 items-center justify-center bg-zinc-100 dark:bg-zinc-800">
+                  <div className="hidden w-44 shrink-0 items-center justify-center bg-zinc-100 sm:flex dark:bg-zinc-800">
                     <PlayCircleIcon className="size-8 text-zinc-400" />
                   </div>
                 )}
-                <div className="flex-1 min-w-0 p-4">
+                <div className="min-w-0 flex-1 p-4">
                   <div className="flex items-center gap-2">
                     <span className="truncate text-sm font-medium text-zinc-900 dark:text-white">
                       {r.videoTitle ?? "Untitled"}
@@ -319,7 +296,9 @@ export default function Home() {
                   </p>
                   <div className="mb-1.5 space-y-1">
                     <div className="flex items-center gap-2">
-                      <span className="w-16 shrink-0 text-xs text-zinc-400 dark:text-zinc-500">Source</span>
+                      <span className="w-16 shrink-0 text-xs text-zinc-400 dark:text-zinc-500">
+                        Source
+                      </span>
                       {isSummaryResult ? (
                         <span className="inline-flex items-center gap-1 rounded bg-teal-50 px-2 py-0.5 text-xs font-medium text-teal-700 dark:bg-teal-500/10 dark:text-teal-400">
                           <DocumentTextIcon className="size-3.5" />
@@ -335,7 +314,9 @@ export default function Home() {
                       )}
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="w-16 shrink-0 text-xs text-zinc-400 dark:text-zinc-500">Match</span>
+                      <span className="w-16 shrink-0 text-xs text-zinc-400 dark:text-zinc-500">
+                        Match
+                      </span>
                       <SourceBadges source={r.source} />
                     </div>
                   </div>
@@ -368,7 +349,9 @@ export default function Home() {
                 to={`/?tag=${encodeURIComponent(tag.slug)}`}
                 className={`flex aspect-square flex-col items-center justify-center rounded-xl text-center shadow-sm transition hover:shadow-md ${getTagColorClass(tag.name)}`}
               >
-                <span className="w-full break-words px-2 text-center text-base font-medium capitalize">{tag.name}</span>
+                <span className="w-full px-2 text-center text-base font-medium break-words capitalize">
+                  {tag.name}
+                </span>
                 <span className="mt-1 text-xs opacity-50">
                   {tag.videoCount} video{tag.videoCount !== 1 ? "s" : ""}
                 </span>
@@ -423,10 +406,7 @@ export default function Home() {
           <TagIcon className="mx-auto mb-3 size-12 text-zinc-300 dark:text-zinc-600" />
           <p className="text-zinc-500 dark:text-zinc-400">
             No videos with this tag.{" "}
-            <Link
-              to="/"
-              className="text-blue-600 hover:underline dark:text-blue-400"
-            >
+            <Link to="/" className="text-blue-600 hover:underline dark:text-blue-400">
               Browse all tags
             </Link>
           </p>
@@ -438,10 +418,7 @@ export default function Home() {
           <PlayCircleIcon className="mx-auto mb-3 size-12 text-zinc-300 dark:text-zinc-600" />
           <p className="text-zinc-500 dark:text-zinc-400">
             No videos yet.{" "}
-            <Link
-              to="/videos"
-              className="text-blue-600 hover:underline dark:text-blue-400"
-            >
+            <Link to="/videos" className="text-blue-600 hover:underline dark:text-blue-400">
               Add your first video
             </Link>
           </p>
@@ -455,12 +432,12 @@ function SourceBadges({ source }: { source: "keyword" | "semantic" | "both" }) {
   return (
     <span className="flex items-center gap-1">
       {(source === "keyword" || source === "both") && (
-        <span className="rounded px-1.5 py-0.5 text-xs font-medium bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">
+        <span className="rounded bg-amber-50 px-1.5 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">
           Keyword
         </span>
       )}
       {(source === "semantic" || source === "both") && (
-        <span className="rounded px-1.5 py-0.5 text-xs font-medium bg-purple-50 text-purple-700 dark:bg-purple-500/10 dark:text-purple-400">
+        <span className="rounded bg-purple-50 px-1.5 py-0.5 text-xs font-medium text-purple-700 dark:bg-purple-500/10 dark:text-purple-400">
           Semantic
         </span>
       )}

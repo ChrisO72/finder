@@ -1,9 +1,10 @@
 import { Mistral } from "@mistralai/mistralai";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { env } from "~/env.server";
 import { withRetry } from "./retry";
 
-const client = new Mistral({ apiKey: process.env.MISTRAL_API_KEY! });
+const client = new Mistral({ apiKey: env.MISTRAL_API_KEY });
 
 export type TranscriptSegment = {
   text: string;

@@ -29,6 +29,20 @@
       "when": 1772993691643,
       "tag": "0003_add-org-proxy-url",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1785533782728,
+      "tag": "0004_blueprint_upgrade",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1785534457361,
+      "tag": "0005_site_settings_singleton",
+      "breakpoints": true
     }
   ]
 }

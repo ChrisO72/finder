@@ -1,6 +1,6 @@
-import "dotenv/config";
+import { env } from "~/env.server";
 
-const redisUrl = new URL(process.env.REDIS_URL || "redis://localhost:6379");
+const redisUrl = new URL(env.REDIS_URL);
 
 export const redisConnection = {
   host: redisUrl.hostname,

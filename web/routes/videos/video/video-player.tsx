@@ -1,8 +1,32 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState } from "react";
+
+type YouTubePlayerOptions = {
+  width: string;
+  height: string;
+  videoId: string;
+  playerVars: {
+    autoplay: number;
+    start: number | undefined;
+    rel: number;
+    modestbranding: number;
+  };
+  events: {
+    onReady: () => void;
+  };
+};
+
+type YouTubePlayerApi = {
+  seekTo: (seconds: number, allowSeekAhead?: boolean) => void;
+  playVideo: () => void;
+  getCurrentTime: () => number;
+  getPlayerState: () => number;
+};
 
 declare global {
   interface Window {
-    YT: { Player: new (...args: any[]) => any };
+    YT: {
+      Player: new (elementId: string, options: YouTubePlayerOptions) => YouTubePlayerApi;
+    };
     onYouTubeIframeAPIReady: (() => void) | undefined;
   }
 }
@@ -26,7 +50,7 @@ export function VideoPlayer({
   onReady,
   onPlayerRef,
 }: VideoPlayerProps) {
-  const playerRef = useRef<any>(null);
+  const playerRef = useRef<YouTubePlayerApi | null>(null);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
@@ -88,7 +112,10 @@ export function VideoPlayer({
   }, [ready, initialTime]);
 
   return (
-    <div className="relative min-h-[360px] w-full overflow-hidden rounded-xl bg-black" style={{ aspectRatio: "16/9" }}>
+    <div
+      className="relative min-h-[360px] w-full overflow-hidden rounded-xl bg-black"
+      style={{ aspectRatio: "16/9" }}
+    >
       <div id="yt-player" className="absolute inset-0 h-full w-full" />
     </div>
   );

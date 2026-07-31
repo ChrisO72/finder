@@ -1,7 +1,8 @@
 import { Mistral } from "@mistralai/mistralai";
+import { env } from "~/env.server";
 import { withRetry } from "./retry";
 
-const client = new Mistral({ apiKey: process.env.MISTRAL_API_KEY! });
+const client = new Mistral({ apiKey: env.MISTRAL_API_KEY });
 
 export async function generateTags(summary: string): Promise<string[]> {
   const result = await withRetry(

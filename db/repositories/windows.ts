@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { db } from "../db";
-import { type InsertWindow, windows } from "../schema";
+import { type InsertWindow, windows } from "../schema/windows";
 
 export async function bulkInsertWindows(rows: InsertWindow[]) {
   if (rows.length === 0) return [];

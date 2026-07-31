@@ -6,7 +6,7 @@ import { defineConfig } from "eslint/config";
 
 export default defineConfig([
   {
-    ignores: [".react-router/"],
+    ignores: [".react-router/", "web/components/ui-kit/", "build/"],
   },
   {
     files: ["**/*.{js,mjs,cjs,ts,mts,cts,jsx,tsx}"],
@@ -35,6 +35,23 @@ export default defineConfig([
       react: {
         version: "detect",
       },
+    },
+  },
+  {
+    files: ["**/*.{js,mjs,cjs,ts,mts,cts,jsx,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              regex: "^\\.\\./\\.\\./",
+              message:
+                "Use the ~/* (web), ~/db/* (db), ~/worker/* (worker), or ~/env.server alias instead of ../../ deep relative imports. See README.md → Conventions.",
+            },
+          ],
+        },
+      ],
     },
   },
 ]);

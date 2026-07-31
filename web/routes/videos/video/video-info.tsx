@@ -8,12 +8,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { Badge } from "~/components/ui-kit/badge";
 import { Button } from "~/components/ui-kit/button";
-import {
-  Dialog,
-  DialogTitle,
-  DialogDescription,
-  DialogActions,
-} from "~/components/ui-kit/dialog";
+import { Dialog, DialogTitle, DialogDescription, DialogActions } from "~/components/ui-kit/dialog";
 import {
   Dropdown,
   DropdownButton,
@@ -41,8 +36,7 @@ export function VideoInfo({ video, tags }: VideoInfoProps) {
   const fetcher = useFetcher();
   const [deleteOpen, setDeleteOpen] = useState(false);
   const isDeleting = fetcher.state !== "idle";
-  const isProcessing =
-    video.status === "processing" || video.status === "pending";
+  const isProcessing = video.status === "processing" || video.status === "pending";
   const progress =
     video.durationSeconds && video.durationSeconds > 0
       ? Math.round((video.processedSeconds / video.durationSeconds) * 100)
@@ -53,7 +47,7 @@ export function VideoInfo({ video, tags }: VideoInfoProps) {
       {/* Fixed: Title, metadata, tags, errors */}
       <div className="shrink-0 space-y-1">
         <div className="flex items-center justify-between gap-3">
-          <h1 className="text-lg font-semibold leading-tight text-zinc-900 dark:text-white">
+          <h1 className="text-lg leading-tight font-semibold text-zinc-900 dark:text-white">
             {video.title ?? "Processing..."}
           </h1>
           <Dropdown>
@@ -62,29 +56,21 @@ export function VideoInfo({ video, tags }: VideoInfoProps) {
             </DropdownButton>
             <DropdownMenu anchor="bottom end">
               <DropdownItem onClick={() => setDeleteOpen(true)}>
-                <TrashIcon className="size-4 " />
-                <DropdownLabel >Delete</DropdownLabel>
+                <TrashIcon className="size-4" />
+                <DropdownLabel>Delete</DropdownLabel>
               </DropdownItem>
             </DropdownMenu>
           </Dropdown>
         </div>
 
-        <Dialog
-          open={deleteOpen}
-          onClose={() => !isDeleting && setDeleteOpen(false)}
-          size="sm"
-        >
+        <Dialog open={deleteOpen} onClose={() => !isDeleting && setDeleteOpen(false)} size="sm">
           <DialogTitle>Delete video</DialogTitle>
           <DialogDescription>
             Are you sure you want to delete &ldquo;
             {video.title ?? "this video"}&rdquo;? This action cannot be undone.
           </DialogDescription>
           <DialogActions>
-            <Button
-              plain
-              onClick={() => setDeleteOpen(false)}
-              disabled={isDeleting}
-            >
+            <Button plain onClick={() => setDeleteOpen(false)} disabled={isDeleting}>
               Cancel
             </Button>
             <fetcher.Form method="post">
@@ -111,11 +97,7 @@ export function VideoInfo({ video, tags }: VideoInfoProps) {
           {video.status !== "ready" && (
             <Badge
               color={
-                video.status === "failed"
-                  ? "red"
-                  : video.status === "processing"
-                    ? "blue"
-                    : "zinc"
+                video.status === "failed" ? "red" : video.status === "processing" ? "blue" : "zinc"
               }
             >
               {video.status === "processing"
@@ -136,9 +118,7 @@ export function VideoInfo({ video, tags }: VideoInfoProps) {
             </div>
             <p className="mt-1 text-xs text-zinc-500">
               Transcribing... {formatTimestamp(video.processedSeconds)} /{" "}
-              {video.durationSeconds
-                ? formatTimestamp(video.durationSeconds)
-                : "?"}
+              {video.durationSeconds ? formatTimestamp(video.durationSeconds) : "?"}
             </p>
           </div>
         )}
@@ -154,9 +134,7 @@ export function VideoInfo({ video, tags }: VideoInfoProps) {
                 >
                   {tag.name}
                 </Link>
-                {i < tags.length - 1 && (
-                  <span className="text-zinc-300 dark:text-zinc-700">·</span>
-                )}
+                {i < tags.length - 1 && <span className="text-zinc-300 dark:text-zinc-700">·</span>}
               </span>
             ))}
           </div>
@@ -172,11 +150,7 @@ export function VideoInfo({ video, tags }: VideoInfoProps) {
             )}
             <fetcher.Form method="post">
               <input type="hidden" name="intent" value="continue" />
-              <Button
-                type="submit"
-                color="blue"
-                disabled={fetcher.state !== "idle"}
-              >
+              <Button type="submit" color="blue" disabled={fetcher.state !== "idle"}>
                 <ArrowPathIcon className="size-4" />
                 {fetcher.state !== "idle" ? "Resuming..." : "Continue processing"}
               </Button>
@@ -188,7 +162,7 @@ export function VideoInfo({ video, tags }: VideoInfoProps) {
       {/* Summary */}
       {video.summary && (
         <div className="mt-3 flex min-h-0 flex-1 flex-col rounded-lg bg-zinc-50 dark:bg-zinc-800/50">
-          <h2 className="shrink-0 px-4 pt-4 pb-1.5 text-xs font-medium uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
+          <h2 className="shrink-0 px-4 pt-4 pb-1.5 text-xs font-medium tracking-wide text-zinc-400 uppercase dark:text-zinc-500">
             Summary
           </h2>
           <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">

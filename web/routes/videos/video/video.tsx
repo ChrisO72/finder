@@ -1,32 +1,26 @@
-import {
-  useLoaderData,
-  useSearchParams,
-  useRevalidator,
-  redirect,
-  Link,
-} from "react-router";
+import { useSearchParams, useRevalidator, redirect, Link } from "react-router";
 import { useEffect, useState, useCallback } from "react";
 import { ArrowLeftIcon } from "@heroicons/react/24/outline";
-import { requireAuth } from "~/lib/session.server";
-import { getUserById } from "~/db/repositories/users";
-import {
-  getVideoByIdForOrg,
-  softDeleteVideo,
-  updateVideo,
-} from "~/db/repositories/videos";
+import { getAuthenticatedUser } from "~/lib/session.server";
+import { getVideoByIdForOrg, softDeleteVideo, updateVideo } from "~/db/repositories/videos";
 import { getSegmentsByVideoId } from "~/db/repositories/segments";
 import { getTagsForVideo } from "~/db/repositories/tags";
-import { defaultQueue } from "../../../../worker/queues";
+import { enqueueJob } from "~/worker/enqueue";
+import { processVideoJobName } from "~/worker/jobs/process-video";
+import { parseForm, type ActionData } from "~/lib/form";
+import { z } from "zod";
 import { VideoPlayer } from "./video-player";
 import type { VideoPlayerHandle } from "./video-player";
 import { VideoInfo } from "./video-info";
 import { TranscriptPanel } from "./transcript-panel";
 import type { Route } from "./+types/video";
 
-export async function loader({ request, params }: Route.LoaderArgs) {
-  const auth = await requireAuth(request);
-  const user = await getUserById(auth.userId);
-  if (!user) throw new Response("Unauthorized", { status: 401 });
+const videoActionSchema = z.object({
+  intent: z.enum(["continue", "delete"]),
+});
+
+export async function loader({ params, context }: Route.LoaderArgs) {
+  const user = getAuthenticatedUser(context);
 
   const videoId = parseInt(params.id, 10);
   if (isNaN(videoId)) throw new Response("Not found", { status: 404 });
@@ -35,40 +29,40 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   if (!video) throw new Response("Not found", { status: 404 });
 
   const segments =
-    video.status === "ready" ||
-    video.status === "processing" ||
-    video.status === "failed"
+    video.status === "ready" || video.status === "processing" || video.status === "failed"
       ? await getSegmentsByVideoId(video.id)
       : [];
 
-  const videoTags =
-    video.status === "ready" ? await getTagsForVideo(video.id) : [];
+  const videoTags = video.status === "ready" ? await getTagsForVideo(video.id) : [];
 
   return { video, segments, videoTags };
 }
 
-export async function action({ request, params }: Route.ActionArgs) {
-  const auth = await requireAuth(request);
-  const user = await getUserById(auth.userId);
-  if (!user) throw new Response("Unauthorized", { status: 401 });
+export async function action({
+  request,
+  params,
+  context,
+}: Route.ActionArgs): Promise<ActionData | Response> {
+  const user = getAuthenticatedUser(context);
 
   const formData = await request.formData();
-  const intent = formData.get("intent");
+  const { data, fieldErrors } = parseForm(formData, videoActionSchema);
+  if (fieldErrors) return { fieldErrors };
 
   const videoId = parseInt(params.id, 10);
   if (isNaN(videoId)) throw new Response("Not found", { status: 404 });
 
-  if (intent === "continue") {
+  if (data.intent === "continue") {
     const video = await getVideoByIdForOrg(videoId, user.organizationId);
     if (!video || video.status !== "failed") {
       throw new Response("Bad request", { status: 400 });
     }
     await updateVideo(videoId, { status: "pending", errorMessage: null });
-    await defaultQueue.add("process-video", { videoId });
-    return { continued: true };
+    await enqueueJob(processVideoJobName, { videoId });
+    return {};
   }
 
-  if (intent === "delete") {
+  if (data.intent === "delete") {
     await softDeleteVideo(videoId, user.organizationId);
     return redirect("/videos");
   }
@@ -76,31 +70,19 @@ export async function action({ request, params }: Route.ActionArgs) {
   throw new Response("Bad request", { status: 400 });
 }
 
-export default function VideoDetailPage() {
-  const { video, segments, videoTags } = useLoaderData<typeof loader>();
+export default function VideoDetailPage({ loaderData }: Route.ComponentProps) {
+  const { video, segments, videoTags } = loaderData;
   const [searchParams] = useSearchParams();
   const revalidator = useRevalidator();
-  const [playerHandle, setPlayerHandle] = useState<VideoPlayerHandle | null>(
-    null,
-  );
+  const [playerHandle, setPlayerHandle] = useState<VideoPlayerHandle | null>(null);
 
   const searchQuery = searchParams.get("q") || "";
-  const searchMode = searchParams.get("mode") as
-    | "keyword"
-    | "semantic"
-    | null;
-  const matchedSegmentId = searchParams.get("sid")
-    ? parseInt(searchParams.get("sid")!, 10)
-    : null;
-  const matchFrom = searchParams.get("from")
-    ? parseFloat(searchParams.get("from")!)
-    : null;
-  const matchTo = searchParams.get("to")
-    ? parseFloat(searchParams.get("to")!)
-    : null;
+  const searchMode = searchParams.get("mode") as "keyword" | "semantic" | null;
+  const matchedSegmentId = searchParams.get("sid") ? parseInt(searchParams.get("sid")!, 10) : null;
+  const matchFrom = searchParams.get("from") ? parseFloat(searchParams.get("from")!) : null;
+  const matchTo = searchParams.get("to") ? parseFloat(searchParams.get("to")!) : null;
   const initialTime = parseInt(searchParams.get("t") ?? "0", 10);
-  const isProcessing =
-    video.status === "processing" || video.status === "pending";
+  const isProcessing = video.status === "processing" || video.status === "pending";
 
   // Poll while processing
   useEffect(() => {

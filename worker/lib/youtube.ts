@@ -6,6 +6,7 @@ import path from "node:path";
 import os from "node:os";
 import youtubeDl from "youtube-dl-exec";
 import ffmpegPath from "ffmpeg-static";
+import { env } from "~/env.server";
 
 const exec = promisify(execFile);
 
@@ -27,7 +28,7 @@ export function setCookies(cookieText: string | null | undefined) {
 }
 
 function proxyFlags(): Record<string, string | boolean> {
-  const url = _proxyUrl ?? process.env.WEBSHARE_PROXY_URL;
+  const url = _proxyUrl ?? env.WEBSHARE_PROXY_URL;
   if (!url) return {};
   return { proxy: url };
 }
@@ -45,9 +46,7 @@ export type VideoMetadata = {
   publishedAt: string | null;
 };
 
-export async function fetchVideoMetadata(
-  youtubeUrl: string,
-): Promise<VideoMetadata> {
+export async function fetchVideoMetadata(youtubeUrl: string): Promise<VideoMetadata> {
   const info = (await youtubeDl(youtubeUrl, {
     dumpJson: true,
     skipDownload: true,
@@ -58,8 +57,7 @@ export async function fetchVideoMetadata(
 
   return {
     title: (info.title as string) ?? "Untitled",
-    channelTitle:
-      (info.uploader as string) ?? (info.channel as string) ?? "Unknown",
+    channelTitle: (info.uploader as string) ?? (info.channel as string) ?? "Unknown",
     thumbnailUrl: (info.thumbnail as string) ?? null,
     durationSeconds: (info.duration as number) ?? 0,
     publishedAt: info.upload_date
@@ -72,10 +70,7 @@ export async function fetchVideoMetadata(
  * Downloads audio and returns the actual file path (extension chosen by yt-dlp).
  * `outputBase` should be the path without an extension, e.g. `/tmp/finder/12/abc123`
  */
-export async function downloadAudio(
-  youtubeUrl: string,
-  outputBase: string,
-): Promise<string> {
+export async function downloadAudio(youtubeUrl: string, outputBase: string): Promise<string> {
   const dir = path.dirname(outputBase);
   const stem = path.basename(outputBase);
   const outputTemplate = path.join(dir, `${stem}.%(ext)s`);

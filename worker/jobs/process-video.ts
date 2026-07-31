@@ -1,46 +1,35 @@
-import { Job } from "bullmq";
 import { readdirSync } from "node:fs";
 import { mkdir, rm } from "node:fs/promises";
-import path from "node:path";
 import os from "node:os";
+import path from "node:path";
+import { getOrganizationById } from "~/db/repositories/organizations";
+import { bulkInsertSegments, getSegmentsByVideoId } from "~/db/repositories/segments";
+import { upsertTag, setVideoTags } from "~/db/repositories/tags";
+import { getVideoById, updateVideo } from "~/db/repositories/videos";
+import { bulkInsertWindows } from "~/db/repositories/windows";
+import { embedTexts } from "../lib/embed";
+import { generateSummary } from "../lib/summarize";
+import { generateTags, slugify } from "../lib/tags";
+import { transcribeChunk } from "../lib/transcribe";
 import {
-  fetchVideoMetadata,
   downloadAudio,
   extractChunk,
-  setProxyUrl,
+  fetchVideoMetadata,
   setCookies,
-} from "./lib/youtube";
-import { transcribeChunk } from "./lib/transcribe";
-import { getVideoById, updateVideo } from "../db/repositories/videos";
-import { getOrganizationById } from "../db/repositories/organizations";
-import { bulkInsertSegments, getSegmentsByVideoId } from "../db/repositories/segments";
-import { bulkInsertWindows } from "../db/repositories/windows";
-import { upsertTag, setVideoTags } from "../db/repositories/tags";
-import { embedTexts } from "./lib/embed";
-import { generateSummary } from "./lib/summarize";
-import { generateTags, slugify } from "./lib/tags";
+  setProxyUrl,
+} from "../lib/youtube";
 
-export type JobData = {
-  "process-video": { videoId: number };
+export const processVideoJobName = "process-video" as const;
+
+export type ProcessVideoJobData = {
+  videoId: number;
 };
-
-export type JobName = keyof JobData;
 
 const CHUNK_SECONDS = 300; // 5 minutes
 const WINDOW_SECONDS = 60;
 const STEP_SECONDS = 30;
 
-export async function processJob(job: Job<JobData[JobName], void, JobName>) {
-  console.log(`[Worker] Processing ${job.name}`, job.data);
-
-  switch (job.name) {
-    case "process-video":
-      await handleProcessVideo(job.data as JobData["process-video"]);
-      break;
-  }
-}
-
-async function handleProcessVideo(data: JobData["process-video"]) {
+export async function handleProcessVideoJob(data: ProcessVideoJobData) {
   const { videoId } = data;
   const video = await getVideoById(videoId);
   if (!video) {
@@ -105,16 +94,11 @@ async function handleProcessVideo(data: JobData["process-video"]) {
 
     for (const chunk of chunks) {
       if (chunk.end <= processedSeconds) {
-        console.log(
-          `[Worker] Skipping chunk ${chunk.start}-${chunk.end}s (already processed)`,
-        );
+        console.log(`[Worker] Skipping chunk ${chunk.start}-${chunk.end}s (already processed)`);
         continue;
       }
 
-      const chunkPath = path.join(
-        tmpDir,
-        `chunk_${chunk.start}_${chunk.end}${audioExt}`,
-      );
+      const chunkPath = path.join(tmpDir, `chunk_${chunk.start}_${chunk.end}${audioExt}`);
 
       console.log(`[Worker] Extracting chunk ${chunk.start}-${chunk.end}s`);
       await extractChunk(audioPath, chunkPath, chunk.start, chunk.end);
@@ -205,6 +189,6 @@ async function handleProcessVideo(data: JobData["process-video"]) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(`[Worker] Failed to process video ${videoId}:`, message);
     await updateVideo(videoId, { status: "failed", errorMessage: message });
-    await rm(tmpDir, { recursive: true, force: true }).catch(() => { });
+    await rm(tmpDir, { recursive: true, force: true }).catch(() => {});
   }
 }

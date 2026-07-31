@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState, useMemo, useCallback } from "react";
 import { MagnifyingGlassIcon } from "@heroicons/react/20/solid";
-import type { Chunk, Segment } from "./utils";
+import type { Segment } from "./utils";
 import { groupSegments, formatTimestamp, highlightWords } from "./utils";
 import type { VideoPlayerHandle } from "./video-player";
 
@@ -31,10 +31,7 @@ export function TranscriptPanel({
   const [activeChunkIdx, setActiveChunkIdx] = useState<number | null>(null);
   const [chunkWindow, setChunkWindow] = useState(10);
 
-  const chunks = useMemo(
-    () => groupSegments(segments, chunkWindow),
-    [segments, chunkWindow],
-  );
+  const chunks = useMemo(() => groupSegments(segments, chunkWindow), [segments, chunkWindow]);
 
   const matchedChunkIndices = useMemo(() => {
     const indices = new Set<number>();
@@ -42,14 +39,9 @@ export function TranscriptPanel({
       chunks.forEach((chunk, idx) => {
         if (chunk.segmentIds.includes(matchedSegmentId)) indices.add(idx);
       });
-    } else if (
-      searchMode === "semantic" &&
-      matchFrom !== null &&
-      matchTo !== null
-    ) {
+    } else if (searchMode === "semantic" && matchFrom !== null && matchTo !== null) {
       chunks.forEach((chunk, idx) => {
-        if (chunk.startSeconds < matchTo && chunk.endSeconds > matchFrom)
-          indices.add(idx);
+        if (chunk.startSeconds < matchTo && chunk.endSeconds > matchFrom) indices.add(idx);
       });
     }
     return indices;
@@ -68,9 +60,7 @@ export function TranscriptPanel({
     const interval = setInterval(() => {
       if (playerHandle.getPlayerState() !== 1) return;
       const time = playerHandle.getCurrentTime();
-      const idx = chunks.findIndex(
-        (c) => c.startSeconds <= time && c.endSeconds > time,
-      );
+      const idx = chunks.findIndex((c) => c.startSeconds <= time && c.endSeconds > time);
       if (idx !== -1) setActiveChunkIdx(idx);
     }, 250);
     return () => clearInterval(interval);
@@ -97,14 +87,10 @@ export function TranscriptPanel({
     <div className="flex h-full flex-col">
       {/* Header */}
       <div className="mb-3 flex shrink-0 items-center justify-between">
-        <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">
-          Transcript
-        </h2>
+        <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Transcript</h2>
         {segments.length > 0 && (
           <div className="flex items-center gap-1.5">
-            <span className="text-xs text-zinc-400 dark:text-zinc-500">
-              Chunk
-            </span>
+            <span className="text-xs text-zinc-400 dark:text-zinc-500">Chunk</span>
             {[5, 10, 20, 30].map((preset) => (
               <button
                 key={preset}
@@ -193,13 +179,11 @@ export function TranscriptPanel({
                     : "hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
               }`}
             >
-              <span className="mr-2 inline-block font-mono text-[11px] tabular-nums text-zinc-400 dark:text-zinc-500">
+              <span className="mr-2 inline-block font-mono text-[11px] text-zinc-400 tabular-nums dark:text-zinc-500">
                 {formatTimestamp(chunk.startSeconds)}
               </span>
               <span className="text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">
-                {searchMode === "keyword" &&
-                matchedChunkIndices.has(idx) &&
-                searchQuery
+                {searchMode === "keyword" && matchedChunkIndices.has(idx) && searchQuery
                   ? highlightWords(chunk.text, searchQuery)
                   : chunk.text}
               </span>

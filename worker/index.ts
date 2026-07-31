@@ -1,7 +1,7 @@
 import { Worker } from "bullmq";
+import { processJob } from "./jobs/dispatcher";
 import { redisConnection } from "./redis";
-import { processJob } from "./jobs";
-import { startScheduler } from "./scheduler";
+import { startSchedules } from "./schedules/register";
 
 const worker = new Worker("default", processJob, {
   connection: redisConnection,
@@ -10,7 +10,7 @@ const worker = new Worker("default", processJob, {
   stalledInterval: 600_000,
 });
 
-startScheduler();
+startSchedules();
 
 console.log("[Worker] Ready");
 

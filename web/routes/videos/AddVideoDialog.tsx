@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useFetcher } from "react-router";
+import { FieldError } from "~/components/field-error";
 import { Button } from "~/components/ui-kit/button";
 import {
   Dialog,
@@ -9,15 +10,13 @@ import {
   DialogActions,
 } from "~/components/ui-kit/dialog";
 import { Input } from "~/components/ui-kit/input";
-import { Field, Label, ErrorMessage } from "~/components/ui-kit/fieldset";
+import { Field, Label } from "~/components/ui-kit/fieldset";
+import type { ActionData } from "~/lib/form";
 
 export function AddVideoDialog() {
   const [open, setOpen] = useState(false);
-  const fetcher = useFetcher();
+  const fetcher = useFetcher<ActionData>();
   const isSubmitting = fetcher.state !== "idle";
-
-  const errors =
-    fetcher.data && !fetcher.data.success ? fetcher.data.errors : null;
 
   return (
     <>
@@ -44,18 +43,13 @@ export function AddVideoDialog() {
                 placeholder="https://www.youtube.com/watch?v=..."
                 required
                 autoFocus
+                invalid={!!fetcher.data?.fieldErrors?.youtubeUrl}
               />
-              {errors?.youtubeUrl && (
-                <ErrorMessage>{errors.youtubeUrl[0]}</ErrorMessage>
-              )}
+              <FieldError name="youtubeUrl" actionData={fetcher.data} />
             </Field>
           </DialogBody>
           <DialogActions>
-            <Button
-              plain
-              onClick={() => setOpen(false)}
-              disabled={isSubmitting}
-            >
+            <Button plain onClick={() => setOpen(false)} disabled={isSubmitting}>
               Cancel
             </Button>
             <Button type="submit" color="blue" disabled={isSubmitting}>

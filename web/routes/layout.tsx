@@ -1,75 +1,49 @@
-import { Outlet, redirect, useLocation, useLoaderData } from "react-router";
-import { SidebarLayout } from "../components/ui-kit/sidebar-layout";
+import { Form, Outlet, useLocation } from "react-router";
+import { ThemeToggle } from "~/components/theme-toggle";
+import { Navbar } from "~/components/ui-kit/navbar";
 import {
   Sidebar,
   SidebarBody,
+  SidebarFooter,
   SidebarHeader,
   SidebarItem,
   SidebarLabel,
   SidebarSection,
-  SidebarFooter,
-} from "../components/ui-kit/sidebar";
-import { Navbar } from "../components/ui-kit/navbar";
-import { ThemeToggle } from "../components/theme-toggle";
-import { requireAuth, setAuthCookies } from "../lib/session.server";
-import { getUserById } from "../../db/repositories/users";
+} from "~/components/ui-kit/sidebar";
+import { SidebarLayout } from "~/components/ui-kit/sidebar-layout";
+import {
+  authenticatedUserContext,
+  getAuthenticatedUser,
+  requireAuth,
+  setAuthCookies,
+} from "~/lib/session.server";
 import type { Route } from "./+types/layout";
 
-export async function loader({ request }: Route.LoaderArgs) {
-  const auth = await requireAuth(request);
+export const middleware: Route.MiddlewareFunction[] = [
+  async ({ request, context }, next) => {
+    const { user, newAccessToken, newRefreshToken } = await requireAuth(request);
+    context.set(authenticatedUserContext, user);
 
-  const user = await getUserById(auth.userId);
-  if (!user) {
-    throw redirect("/login");
-  }
+    const response = await next();
+    if (newAccessToken && newRefreshToken) {
+      const cookies = await setAuthCookies(newAccessToken, newRefreshToken);
+      cookies.forEach((cookie) => response.headers.append("Set-Cookie", cookie));
+    }
+    return response;
+  },
+];
 
-  // If we got new tokens from refresh, set both cookies
-  if (auth.newAccessToken && auth.newRefreshToken) {
-    const cookies = setAuthCookies(auth.newAccessToken, auth.newRefreshToken);
-    const headers = new Headers();
-    cookies.forEach((cookie) => headers.append("Set-Cookie", cookie));
-    return Response.json({ user }, { headers });
-  }
-
-  return { user };
+export function loader({ context }: Route.LoaderArgs) {
+  return { user: getAuthenticatedUser(context) };
 }
 
-function generateBreadcrumbs(
-  pathname: string,
-): Array<{ name: string; href: string; current: boolean }> {
-  const pages: Array<{ name: string; href: string; current: boolean }> = [];
-
-  // Remove leading/trailing slashes and split
-  const segments = pathname.split("/").filter(Boolean);
-
-  let currentPath = "";
-
-  for (let i = 0; i < segments.length; i++) {
-    const segment = segments[i];
-    currentPath += `/${segment}`;
-
-    // Map segment to display name: replace - with space, capitalize first letter
-    let name = segment.charAt(0).toUpperCase() + segment.slice(1).replace(/-/g, " ");
-
-    pages.push({
-      name,
-      href: currentPath,
-      current: i === segments.length - 1,
-    });
-  }
-
-  return pages;
-}
-
-export default function Layout() {
-  const location = useLocation();
-  const { user } = useLoaderData<typeof loader>();
-  const pathname = location.pathname || "/";
-  const breadcrumbPages = pathname === "/" ? [] : generateBreadcrumbs(pathname);
+export default function Layout({ loaderData }: Route.ComponentProps) {
+  const { pathname } = useLocation();
+  const { user } = loaderData;
 
   return (
     <SidebarLayout
-      navbar={<Navbar>{/* Mobile navbar content */}</Navbar>}
+      navbar={<Navbar />}
       sidebar={
         <Sidebar>
           <SidebarHeader>
@@ -88,30 +62,30 @@ export default function Layout() {
               <SidebarItem href="/settings" current={pathname.startsWith("/settings")}>
                 <SidebarLabel>Settings</SidebarLabel>
               </SidebarItem>
+              {user.role === "admin" && (
+                <SidebarItem href="/admin" current={pathname.startsWith("/admin")}>
+                  <SidebarLabel>Admin</SidebarLabel>
+                </SidebarItem>
+              )}
             </SidebarSection>
           </SidebarBody>
           <SidebarFooter>
             <ThemeToggle />
             <div className="flex items-center justify-between p-2">
-              <div className="flex items-center gap-4">
-                {/* <Avatar
-                  className="size-10"
-                  initials={user.firstName ? user.firstName.slice(0, 1) : user.email.slice(0, 1)}
-                /> */}
-                <div>
-                  <div>{user.firstName}</div>
-                  <div className="text-xs opacity-60">{user.email}</div>
-                </div>
+              <div>
+                <div>{user.firstName}</div>
+                <div className="text-xs opacity-60">{user.email}</div>
               </div>
             </div>
-            <SidebarItem href="/logout">
-              <SidebarLabel>Sign out</SidebarLabel>
-            </SidebarItem>
+            <Form method="post" action="/logout">
+              <SidebarItem type="submit">
+                <SidebarLabel>Sign out</SidebarLabel>
+              </SidebarItem>
+            </Form>
           </SidebarFooter>
         </Sidebar>
       }
     >
-      {/* {breadcrumbPages.length > 0 && <Breadcrumb pages={breadcrumbPages} />} */}
       <Outlet />
     </SidebarLayout>
   );

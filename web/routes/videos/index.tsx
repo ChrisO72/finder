@@ -1,21 +1,14 @@
-import { Link, redirect, useLoaderData, useRevalidator } from "react-router";
+import { Link, redirect, useRevalidator } from "react-router";
 import { useEffect } from "react";
-import {
-  PlayCircleIcon,
-  ClockIcon,
-  ExclamationTriangleIcon,
-} from "@heroicons/react/24/outline";
+import { PlayCircleIcon, ClockIcon, ExclamationTriangleIcon } from "@heroicons/react/24/outline";
 import { z } from "zod";
-import { requireAuth } from "~/lib/session.server";
-import { getUserById } from "~/db/repositories/users";
-import {
-  listVideosByOrg,
-  countVideosByOrg,
-  createVideo,
-} from "~/db/repositories/videos";
+import { getAuthenticatedUser } from "~/lib/session.server";
+import { listVideosByOrg, countVideosByOrg, createVideo } from "~/db/repositories/videos";
 import { Heading } from "~/components/ui-kit/heading";
+import { parseForm, type ActionData } from "~/lib/form";
+import { enqueueJob } from "~/worker/enqueue";
+import { processVideoJobName } from "~/worker/jobs/process-video";
 import { AddVideoDialog } from "./AddVideoDialog";
-import { defaultQueue } from "../../../worker/queues";
 import type { Route } from "./+types/index";
 
 const addVideoSchema = z.object({
@@ -41,10 +34,8 @@ function extractYouTubeId(url: string): string | null {
 
 const PAGE_SIZE = 12;
 
-export async function loader({ request }: Route.LoaderArgs) {
-  const auth = await requireAuth(request);
-  const user = await getUserById(auth.userId);
-  if (!user) throw new Response("Unauthorized", { status: 401 });
+export async function loader({ request, context }: Route.LoaderArgs) {
+  const user = getAuthenticatedUser(context);
 
   const url = new URL(request.url);
   const page = Math.max(1, parseInt(url.searchParams.get("page") ?? "1", 10));
@@ -60,37 +51,32 @@ export async function loader({ request }: Route.LoaderArgs) {
   return { videos, page, totalPages, totalCount, hasProcessing };
 }
 
-export async function action({ request }: Route.ActionArgs) {
-  const auth = await requireAuth(request);
-  const user = await getUserById(auth.userId);
-  if (!user) throw new Response("Unauthorized", { status: 401 });
+export async function action({
+  request,
+  context,
+}: Route.ActionArgs): Promise<ActionData | Response> {
+  const user = getAuthenticatedUser(context);
 
   const formData = await request.formData();
-  const data = Object.fromEntries(formData);
+  const { data, fieldErrors } = parseForm(formData, addVideoSchema);
+  if (fieldErrors) return { fieldErrors };
 
-  const result = addVideoSchema.safeParse(data);
-  if (!result.success) {
-    return {
-      success: false as const,
-      errors: z.flattenError(result.error).fieldErrors,
-    };
-  }
-
-  const videoId = extractYouTubeId(result.data.youtubeUrl);
+  const videoId = extractYouTubeId(data.youtubeUrl);
   if (!videoId) {
     return {
-      success: false as const,
-      errors: { youtubeUrl: ["Could not extract a YouTube video ID from this URL"] },
+      fieldErrors: {
+        youtubeUrl: ["Could not extract a YouTube video ID from this URL"],
+      },
     };
   }
 
   const video = await createVideo({
     organizationId: user.organizationId,
-    youtubeUrl: result.data.youtubeUrl,
+    youtubeUrl: data.youtubeUrl,
     youtubeVideoId: videoId,
   });
 
-  await defaultQueue.add("process-video", { videoId: video.id });
+  await enqueueJob(processVideoJobName, { videoId: video.id });
 
   return redirect("/videos");
 }
@@ -100,8 +86,7 @@ function formatDuration(seconds: number | null): string {
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
   const s = Math.floor(seconds % 60);
-  if (h > 0)
-    return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
@@ -112,14 +97,7 @@ function CircularProgress({ percent }: { percent: number }) {
 
   return (
     <svg className="size-16 drop-shadow-lg" viewBox="0 0 44 44">
-      <circle
-        cx="22"
-        cy="22"
-        r={r}
-        fill="none"
-        stroke="rgba(255,255,255,0.25)"
-        strokeWidth="2.5"
-      />
+      <circle cx="22" cy="22" r={r} fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="2.5" />
       <circle
         cx="22"
         cy="22"
@@ -148,9 +126,8 @@ function CircularProgress({ percent }: { percent: number }) {
   );
 }
 
-export default function VideosPage() {
-  const { videos, page, totalPages, totalCount, hasProcessing } =
-    useLoaderData<typeof loader>();
+export default function VideosPage({ loaderData }: Route.ComponentProps) {
+  const { videos, page, totalPages, totalCount, hasProcessing } = loaderData;
   const revalidator = useRevalidator();
 
   useEffect(() => {
@@ -178,21 +155,15 @@ export default function VideosPage() {
       {videos.length === 0 ? (
         <div className="rounded-lg border border-dashed border-zinc-300 py-16 text-center dark:border-zinc-700">
           <PlayCircleIcon className="mx-auto mb-3 size-12 text-zinc-300 dark:text-zinc-600" />
-          <p className="text-zinc-500 dark:text-zinc-400">
-            No videos yet. Add your first one!
-          </p>
+          <p className="text-zinc-500 dark:text-zinc-400">No videos yet. Add your first one!</p>
         </div>
       ) : (
         <>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {videos.map((video) => {
               const progress =
-                video.status === "processing" &&
-                  video.durationSeconds &&
-                  video.durationSeconds > 0
-                  ? Math.round(
-                    (video.processedSeconds / video.durationSeconds) * 100,
-                  )
+                video.status === "processing" && video.durationSeconds && video.durationSeconds > 0
+                  ? Math.round((video.processedSeconds / video.durationSeconds) * 100)
                   : null;
               const hasOverlay = video.status !== "ready";
 
@@ -210,11 +181,10 @@ export default function VideosPage() {
                         className="aspect-video w-full object-cover"
                       />
                     ) : (
-                      <div className="flex aspect-video items-center justify-center bg-zinc-100 dark:bg-zinc-800">
-                      </div>
+                      <div className="flex aspect-video items-center justify-center bg-zinc-100 dark:bg-zinc-800"></div>
                     )}
                     {video.durationSeconds && !hasOverlay && (
-                      <span className="absolute bottom-2 right-2 rounded bg-black/70 px-1.5 py-0.5 text-xs font-medium text-white">
+                      <span className="absolute right-2 bottom-2 rounded bg-black/70 px-1.5 py-0.5 text-xs font-medium text-white">
                         {formatDuration(video.durationSeconds)}
                       </span>
                     )}
@@ -232,9 +202,7 @@ export default function VideosPage() {
                       <div className="absolute inset-0 flex items-center justify-center bg-black/60">
                         <div className="flex flex-col items-center gap-1">
                           <ExclamationTriangleIcon className="size-8 text-red-400" />
-                          <span className="text-xs font-semibold text-red-300">
-                            Failed
-                          </span>
+                          <span className="text-xs font-semibold text-red-300">Failed</span>
                         </div>
                       </div>
                     )}

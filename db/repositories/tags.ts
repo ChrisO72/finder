@@ -1,12 +1,9 @@
 import { and, count, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "../db";
-import { tags, videoTags, videos } from "../schema";
+import { tags, videoTags } from "../schema/tags";
+import { videos } from "../schema/videos";
 
-export async function upsertTag(
-  name: string,
-  slug: string,
-  organizationId: number,
-) {
+export async function upsertTag(name: string, slug: string, organizationId: number) {
   const [existing] = await db
     .select()
     .from(tags)
@@ -35,9 +32,7 @@ export async function upsertTag(
 export async function setVideoTags(videoId: number, tagIds: number[]) {
   await db.delete(videoTags).where(eq(videoTags.videoId, videoId));
   if (tagIds.length === 0) return;
-  await db
-    .insert(videoTags)
-    .values(tagIds.map((tagId) => ({ videoId, tagId })));
+  await db.insert(videoTags).values(tagIds.map((tagId) => ({ videoId, tagId })));
 }
 
 export async function getTagsForVideo(videoId: number) {
@@ -55,9 +50,7 @@ export type TagWithCount = {
   videoCount: number;
 };
 
-export async function getTagsByOrganization(
-  organizationId: number,
-): Promise<TagWithCount[]> {
+export async function getTagsByOrganization(organizationId: number): Promise<TagWithCount[]> {
   const rows = await db
     .select({
       id: tags.id,

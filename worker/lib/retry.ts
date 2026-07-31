@@ -1,10 +1,7 @@
 const MAX_RETRIES = 5;
 const BASE_DELAY_MS = 1000;
 
-export async function withRetry<T>(
-  fn: () => Promise<T>,
-  label: string,
-): Promise<T> {
+export async function withRetry<T>(fn: () => Promise<T>, label: string): Promise<T> {
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
       return await fn();

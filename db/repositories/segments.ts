@@ -1,9 +1,9 @@
 import { eq, sql } from "drizzle-orm";
-import { Mistral } from "@mistralai/mistralai";
 import { db } from "../db";
-import { type InsertSegment, segments, windows, videos, videoTags, tags } from "../schema";
-
-const mistral = new Mistral({ apiKey: process.env.MISTRAL_API_KEY! });
+import { type InsertSegment, segments } from "../schema/segments";
+import { tags, videoTags } from "../schema/tags";
+import { videos } from "../schema/videos";
+import { windows } from "../schema/windows";
 
 export async function bulkInsertSegments(rows: InsertSegment[]) {
   if (rows.length === 0) return [];
@@ -39,11 +39,7 @@ export async function searchSegments(
   tagSlug?: string,
 ): Promise<SearchResult[]> {
   const tsquery = sql`plainto_tsquery('english', ${query})`;
-
-  const tagJoin = tagSlug
-    ? sql`INNER JOIN ${videoTags} ON ${videoTags.videoId} = ${videos.id}
-           INNER JOIN ${tags} ON ${videoTags.tagId} = ${tags.id} AND ${tags.slug} = ${tagSlug}`
-    : sql``;
+  const tagJoin = getTagJoin(tagSlug);
 
   const rows = await db.execute<SearchResult>(sql`
     SELECT
@@ -88,26 +84,13 @@ export type SemanticResult = {
 };
 
 export async function semanticSearchSegments(
-  query: string,
+  queryEmbedding: number[],
   organizationId: number,
   limit: number = 20,
   tagSlug?: string,
-  precomputedEmbedding?: number[],
 ): Promise<SemanticResult[]> {
-  let queryEmbedding = precomputedEmbedding;
-  if (!queryEmbedding) {
-    const embeddingResult = await mistral.embeddings.create({
-      model: "mistral-embed",
-      inputs: [query],
-    });
-    queryEmbedding = embeddingResult.data[0].embedding as number[];
-  }
-  const vectorLiteral = `[${queryEmbedding.join(",")}]`;
-
-  const tagJoin = tagSlug
-    ? sql`INNER JOIN ${videoTags} ON ${videoTags.videoId} = ${videos.id}
-           INNER JOIN ${tags} ON ${videoTags.tagId} = ${tags.id} AND ${tags.slug} = ${tagSlug}`
-    : sql``;
+  const vectorValue = sql`${toVectorLiteral(queryEmbedding)}::vector`;
+  const tagJoin = getTagJoin(tagSlug);
 
   const rows = await db.execute<SemanticResult>(sql`
     SELECT
@@ -116,7 +99,7 @@ export async function semanticSearchSegments(
       ${windows.text} AS "text",
       ${windows.startSeconds} AS "startSeconds",
       ${windows.endSeconds} AS "endSeconds",
-      1 - (${windows.embedding} <=> ${sql.raw(`'${vectorLiteral}'::vector`)}) AS "similarity",
+      1 - (${windows.embedding} <=> ${vectorValue}) AS "similarity",
       ${videos.title} AS "videoTitle",
       ${videos.youtubeVideoId} AS "youtubeVideoId",
       ${videos.thumbnailUrl} AS "thumbnailUrl",
@@ -128,7 +111,7 @@ export async function semanticSearchSegments(
       ${windows.embedding} IS NOT NULL
       AND ${videos.organizationId} = ${organizationId}
       AND ${videos.deletedAt} IS NULL
-    ORDER BY ${windows.embedding} <=> ${sql.raw(`'${vectorLiteral}'::vector`)}
+    ORDER BY ${windows.embedding} <=> ${vectorValue}
     LIMIT ${limit}
   `);
 
@@ -153,11 +136,7 @@ export async function searchVideoSummaries(
   tagSlug?: string,
 ): Promise<VideoSearchResult[]> {
   const tsquery = sql`plainto_tsquery('english', ${query})`;
-
-  const tagJoin = tagSlug
-    ? sql`INNER JOIN ${videoTags} ON ${videoTags.videoId} = ${videos.id}
-           INNER JOIN ${tags} ON ${videoTags.tagId} = ${tags.id} AND ${tags.slug} = ${tagSlug}`
-    : sql``;
+  const tagJoin = getTagJoin(tagSlug);
 
   const rows = await db.execute<VideoSearchResult>(sql`
     SELECT
@@ -196,32 +175,19 @@ export type VideoSemanticResult = {
 };
 
 export async function semanticSearchVideoSummaries(
-  query: string,
+  queryEmbedding: number[],
   organizationId: number,
   limit: number = 20,
   tagSlug?: string,
-  precomputedEmbedding?: number[],
 ): Promise<VideoSemanticResult[]> {
-  let queryEmbedding = precomputedEmbedding;
-  if (!queryEmbedding) {
-    const embeddingResult = await mistral.embeddings.create({
-      model: "mistral-embed",
-      inputs: [query],
-    });
-    queryEmbedding = embeddingResult.data[0].embedding as number[];
-  }
-  const vectorLiteral = `[${queryEmbedding.join(",")}]`;
-
-  const tagJoin = tagSlug
-    ? sql`INNER JOIN ${videoTags} ON ${videoTags.videoId} = ${videos.id}
-           INNER JOIN ${tags} ON ${videoTags.tagId} = ${tags.id} AND ${tags.slug} = ${tagSlug}`
-    : sql``;
+  const vectorValue = sql`${toVectorLiteral(queryEmbedding)}::vector`;
+  const tagJoin = getTagJoin(tagSlug);
 
   const rows = await db.execute<VideoSemanticResult>(sql`
     SELECT
       ${videos.id} AS "videoId",
       ${videos.summary} AS "summary",
-      1 - (${videos.summaryEmbedding} <=> ${sql.raw(`'${vectorLiteral}'::vector`)}) AS "similarity",
+      1 - (${videos.summaryEmbedding} <=> ${vectorValue}) AS "similarity",
       ${videos.title} AS "videoTitle",
       ${videos.youtubeVideoId} AS "youtubeVideoId",
       ${videos.thumbnailUrl} AS "thumbnailUrl",
@@ -232,145 +198,23 @@ export async function semanticSearchVideoSummaries(
       ${videos.summaryEmbedding} IS NOT NULL
       AND ${videos.organizationId} = ${organizationId}
       AND ${videos.deletedAt} IS NULL
-    ORDER BY ${videos.summaryEmbedding} <=> ${sql.raw(`'${vectorLiteral}'::vector`)}
+    ORDER BY ${videos.summaryEmbedding} <=> ${vectorValue}
     LIMIT ${limit}
   `);
 
   return rows.rows;
 }
 
-export type HybridResult = {
-  videoId: number;
-  text: string;
-  headline: string | null;
-  startSeconds: number;
-  endSeconds: number;
-  score: number;
-  videoTitle: string | null;
-  youtubeVideoId: string;
-  thumbnailUrl: string | null;
-  channelTitle: string | null;
-  source: "keyword" | "semantic" | "both";
-  segmentId: number | null;
-};
+function getTagJoin(tagSlug?: string) {
+  return tagSlug
+    ? sql`INNER JOIN ${videoTags} ON ${videoTags.videoId} = ${videos.id}
+           INNER JOIN ${tags} ON ${videoTags.tagId} = ${tags.id} AND ${tags.slug} = ${tagSlug}`
+    : sql``;
+}
 
-export async function hybridSearch(
-  query: string,
-  organizationId: number,
-  limit: number = 20,
-  tagSlug?: string,
-): Promise<HybridResult[]> {
-  const embeddingResult = await mistral.embeddings.create({
-    model: "mistral-embed",
-    inputs: [query],
-  });
-  const queryEmbedding = embeddingResult.data[0].embedding as number[];
-
-  const [kwSegments, semSegments, kwVideos, semVideos] = await Promise.all([
-    searchSegments(query, organizationId, limit, tagSlug),
-    semanticSearchSegments(query, organizationId, limit, tagSlug, queryEmbedding),
-    searchVideoSummaries(query, organizationId, limit, tagSlug),
-    semanticSearchVideoSummaries(query, organizationId, limit, tagSlug, queryEmbedding),
-  ]);
-
-  const k = 60;
-  const bucketSize = 30;
-  const map = new Map<string, HybridResult>();
-
-  const segmentBucketKey = (videoId: number, startSeconds: number) =>
-    `${videoId}:${Math.floor(startSeconds / bucketSize)}`;
-
-  const summaryBucketKey = (videoId: number) => `${videoId}:summary`;
-
-  function upsert(key: string, rrfScore: number, entry: HybridResult) {
-    const existing = map.get(key);
-    if (existing) {
-      existing.score += rrfScore;
-      if (existing.source !== entry.source) existing.source = "both";
-      existing.headline = existing.headline ?? entry.headline;
-      existing.segmentId = existing.segmentId ?? entry.segmentId;
-    } else {
-      map.set(key, entry);
-    }
+function toVectorLiteral(embedding: number[]): string {
+  if (embedding.length === 0 || !embedding.every(Number.isFinite)) {
+    throw new Error("Query embedding must contain finite numbers");
   }
-
-  kwSegments.forEach((r, i) => {
-    const key = segmentBucketKey(r.videoId, r.startSeconds);
-    const rrfScore = 1 / (k + i + 1);
-    upsert(key, rrfScore, {
-      videoId: r.videoId,
-      text: r.text,
-      headline: r.headline,
-      startSeconds: r.startSeconds,
-      endSeconds: r.endSeconds,
-      score: rrfScore,
-      videoTitle: r.videoTitle,
-      youtubeVideoId: r.youtubeVideoId,
-      thumbnailUrl: r.thumbnailUrl,
-      channelTitle: r.channelTitle,
-      source: "keyword",
-      segmentId: r.segmentId,
-    });
-  });
-
-  semSegments.forEach((r, i) => {
-    const key = segmentBucketKey(r.videoId, r.startSeconds);
-    const rrfScore = 1 / (k + i + 1);
-    upsert(key, rrfScore, {
-      videoId: r.videoId,
-      text: r.text,
-      headline: null,
-      startSeconds: r.startSeconds,
-      endSeconds: r.endSeconds,
-      score: rrfScore,
-      videoTitle: r.videoTitle,
-      youtubeVideoId: r.youtubeVideoId,
-      thumbnailUrl: r.thumbnailUrl,
-      channelTitle: r.channelTitle,
-      source: "semantic",
-      segmentId: null,
-    });
-  });
-
-  kwVideos.forEach((r, i) => {
-    const key = summaryBucketKey(r.videoId);
-    const rrfScore = 1 / (k + i + 1);
-    upsert(key, rrfScore, {
-      videoId: r.videoId,
-      text: r.summary,
-      headline: r.headline,
-      startSeconds: 0,
-      endSeconds: 0,
-      score: rrfScore,
-      videoTitle: r.videoTitle,
-      youtubeVideoId: r.youtubeVideoId,
-      thumbnailUrl: r.thumbnailUrl,
-      channelTitle: r.channelTitle,
-      source: "keyword",
-      segmentId: null,
-    });
-  });
-
-  semVideos.forEach((r, i) => {
-    const key = summaryBucketKey(r.videoId);
-    const rrfScore = 1 / (k + i + 1);
-    upsert(key, rrfScore, {
-      videoId: r.videoId,
-      text: r.summary,
-      headline: null,
-      startSeconds: 0,
-      endSeconds: 0,
-      score: rrfScore,
-      videoTitle: r.videoTitle,
-      youtubeVideoId: r.youtubeVideoId,
-      thumbnailUrl: r.thumbnailUrl,
-      channelTitle: r.channelTitle,
-      source: "semantic",
-      segmentId: null,
-    });
-  });
-
-  return [...map.values()]
-    .sort((a, b) => b.score - a.score)
-    .slice(0, limit);
+  return `[${embedding.join(",")}]`;
 }

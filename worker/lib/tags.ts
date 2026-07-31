@@ -13,7 +13,7 @@ export async function generateTags(summary: string): Promise<string[]> {
           {
             role: "system",
             content:
-              "Extract 3-8 short topic tags from the following video summary. " +
+              "Extract 3-8 short topic tags from the following podcast episode summary. " +
               "Each tag should be 1-3 words, lowercase, and descriptive of a key topic. " +
               "IMPORTANT: Write the tags in the same language as the summary. " +
               'Respond with ONLY a JSON array of strings, e.g. ["machine learning", "python", "data science"]. ' +

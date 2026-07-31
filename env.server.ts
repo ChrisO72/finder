@@ -11,10 +11,6 @@ const envSchema = z.object({
   MAIL_FROM: z.string().min(1),
   APP_URL: z.url(),
   MISTRAL_API_KEY: z.string().min(1),
-  WEBSHARE_PROXY_URL: z.preprocess(
-    (value) => (value === "" ? undefined : value),
-    z.url().optional(),
-  ),
 });
 
 const parsed = envSchema.safeParse(process.env);

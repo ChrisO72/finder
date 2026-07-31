@@ -5,43 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1772971676173,
-      "tag": "0000_odd_tony_stark",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1772973233748,
-      "tag": "0001_light_talkback",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1772980036978,
-      "tag": "0002_uneven_makkari",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1772993691643,
-      "tag": "0003_add-org-proxy-url",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1785533782728,
-      "tag": "0004_blueprint_upgrade",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "7",
-      "when": 1785534457361,
-      "tag": "0005_site_settings_singleton",
+      "when": 1785537553992,
+      "tag": "0000_buzzsprout_audio",
       "breakpoints": true
     }
   ]

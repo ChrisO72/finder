@@ -1,6 +1,7 @@
 # Finder
 
-Turn any video into something you can search. Paste a YouTube link and jump straight to the moment you’re looking for.
+Turn public Buzzsprout podcasts into a searchable audio archive. Save a feed, process its episodes,
+and jump straight to the moment you are looking for.
 
 ## Tech stack
 
@@ -14,10 +15,6 @@ Turn any video into something you can search. Paste a YouTube link and jump stra
 
 - Node.js 24+
 - Docker (for local PostgreSQL + Redis)
-- **yt-dlp** — `brew install yt-dlp`
-- **ffmpeg** — `brew install ffmpeg`
-
-Finder also declares `youtube-dl-exec` and `ffmpeg-static`; the system binaries remain useful for local troubleshooting and direct CLI use.
 
 ## Local development
 
@@ -48,7 +45,13 @@ All variables are validated at boot by [env.server.ts](env.server.ts). Copy [.en
 - `JWT_SECRET` and `REFRESH_SECRET` (at least 32 characters each)
 - `LETTERMINT_API_KEY`, `MAIL_FROM`, and `APP_URL`
 - `MISTRAL_API_KEY`
-- Optional `WEBSHARE_PROXY_URL`
+
+### Buzzsprout workflow
+
+Sign in as an administrator, open `/admin/episodes`, and add the public HTTPS RSS feed from a
+Buzzsprout podcast. Finder saves the feed, imports new episodes, and queues their public audio
+enclosures for transcription. Use the feed's **Sync** action whenever you want to discover newly
+published episodes.
 
 ### Database, queue, and containers
 
@@ -81,14 +84,11 @@ npm run check                  # typecheck + lint + format
 
 `npm run check` runs `react-router typegen && tsc && eslint . && prettier --check .` and is the required pre-finish gate.
 
-## Upgrade notes
+## Fresh schema note
 
-- Apply the generated database migrations before starting the upgraded application.
-- Existing refresh cookies are invalidated because Finder now stores refresh-token hashes; users
-  sign in once again.
-- On an existing installation without an administrator, the oldest active account is promoted to
-  admin under a database lock. This preserves the blueprint's first-user-admin behavior without
-  granting the role based on login order.
+The Buzzsprout version uses a clean migration baseline and does not migrate rows from the previous
+media schema. If your local Docker volume contains that schema, run `npm run docker:wipe`, start
+the containers again, and apply the migration.
 
 ## Project layout
 

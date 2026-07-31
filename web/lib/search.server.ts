@@ -1,25 +1,24 @@
 import { Mistral } from "@mistralai/mistralai";
 import {
+  searchEpisodeSummaries,
   searchSegments,
-  searchVideoSummaries,
+  semanticSearchEpisodeSummaries,
   semanticSearchSegments,
-  semanticSearchVideoSummaries,
 } from "~/db/repositories/segments";
 import { env } from "~/env.server";
 
 const mistral = new Mistral({ apiKey: env.MISTRAL_API_KEY });
 
 export type HybridResult = {
-  videoId: number;
+  episodeId: number;
   text: string;
   headline: string | null;
   startSeconds: number;
   endSeconds: number;
   score: number;
-  videoTitle: string | null;
-  youtubeVideoId: string;
-  thumbnailUrl: string | null;
-  channelTitle: string | null;
+  episodeTitle: string;
+  artworkUrl: string | null;
+  podcastTitle: string;
   source: "keyword" | "semantic" | "both";
   segmentId: number | null;
 };
@@ -43,19 +42,19 @@ export async function hybridSearch(
   tagSlug?: string,
 ): Promise<HybridResult[]> {
   const queryEmbedding = await createQueryEmbedding(query);
-  const [kwSegments, semSegments, kwVideos, semVideos] = await Promise.all([
+  const [kwSegments, semSegments, kwEpisodes, semEpisodes] = await Promise.all([
     searchSegments(query, organizationId, limit, tagSlug),
     semanticSearchSegments(queryEmbedding, organizationId, limit, tagSlug),
-    searchVideoSummaries(query, organizationId, limit, tagSlug),
-    semanticSearchVideoSummaries(queryEmbedding, organizationId, limit, tagSlug),
+    searchEpisodeSummaries(query, organizationId, limit, tagSlug),
+    semanticSearchEpisodeSummaries(queryEmbedding, organizationId, limit, tagSlug),
   ]);
 
   const k = 60;
   const bucketSize = 30;
   const results = new Map<string, HybridResult>();
-  const segmentBucketKey = (videoId: number, startSeconds: number) =>
-    `${videoId}:${Math.floor(startSeconds / bucketSize)}`;
-  const summaryBucketKey = (videoId: number) => `${videoId}:summary`;
+  const segmentBucketKey = (episodeId: number, startSeconds: number) =>
+    `${episodeId}:${Math.floor(startSeconds / bucketSize)}`;
+  const summaryBucketKey = (episodeId: number) => `${episodeId}:summary`;
 
   function upsert(key: string, score: number, entry: HybridResult) {
     const existing = results.get(key);
@@ -72,17 +71,16 @@ export async function hybridSearch(
 
   kwSegments.forEach((result, index) => {
     const score = 1 / (k + index + 1);
-    upsert(segmentBucketKey(result.videoId, result.startSeconds), score, {
-      videoId: result.videoId,
+    upsert(segmentBucketKey(result.episodeId, result.startSeconds), score, {
+      episodeId: result.episodeId,
       text: result.text,
       headline: result.headline,
       startSeconds: result.startSeconds,
       endSeconds: result.endSeconds,
       score,
-      videoTitle: result.videoTitle,
-      youtubeVideoId: result.youtubeVideoId,
-      thumbnailUrl: result.thumbnailUrl,
-      channelTitle: result.channelTitle,
+      episodeTitle: result.episodeTitle,
+      artworkUrl: result.artworkUrl,
+      podcastTitle: result.podcastTitle,
       source: "keyword",
       segmentId: result.segmentId,
     });
@@ -90,53 +88,50 @@ export async function hybridSearch(
 
   semSegments.forEach((result, index) => {
     const score = 1 / (k + index + 1);
-    upsert(segmentBucketKey(result.videoId, result.startSeconds), score, {
-      videoId: result.videoId,
+    upsert(segmentBucketKey(result.episodeId, result.startSeconds), score, {
+      episodeId: result.episodeId,
       text: result.text,
       headline: null,
       startSeconds: result.startSeconds,
       endSeconds: result.endSeconds,
       score,
-      videoTitle: result.videoTitle,
-      youtubeVideoId: result.youtubeVideoId,
-      thumbnailUrl: result.thumbnailUrl,
-      channelTitle: result.channelTitle,
+      episodeTitle: result.episodeTitle,
+      artworkUrl: result.artworkUrl,
+      podcastTitle: result.podcastTitle,
       source: "semantic",
       segmentId: null,
     });
   });
 
-  kwVideos.forEach((result, index) => {
+  kwEpisodes.forEach((result, index) => {
     const score = 1 / (k + index + 1);
-    upsert(summaryBucketKey(result.videoId), score, {
-      videoId: result.videoId,
+    upsert(summaryBucketKey(result.episodeId), score, {
+      episodeId: result.episodeId,
       text: result.summary,
       headline: result.headline,
       startSeconds: 0,
       endSeconds: 0,
       score,
-      videoTitle: result.videoTitle,
-      youtubeVideoId: result.youtubeVideoId,
-      thumbnailUrl: result.thumbnailUrl,
-      channelTitle: result.channelTitle,
+      episodeTitle: result.episodeTitle,
+      artworkUrl: result.artworkUrl,
+      podcastTitle: result.podcastTitle,
       source: "keyword",
       segmentId: null,
     });
   });
 
-  semVideos.forEach((result, index) => {
+  semEpisodes.forEach((result, index) => {
     const score = 1 / (k + index + 1);
-    upsert(summaryBucketKey(result.videoId), score, {
-      videoId: result.videoId,
+    upsert(summaryBucketKey(result.episodeId), score, {
+      episodeId: result.episodeId,
       text: result.summary,
       headline: null,
       startSeconds: 0,
       endSeconds: 0,
       score,
-      videoTitle: result.videoTitle,
-      youtubeVideoId: result.youtubeVideoId,
-      thumbnailUrl: result.thumbnailUrl,
-      channelTitle: result.channelTitle,
+      episodeTitle: result.episodeTitle,
+      artworkUrl: result.artworkUrl,
+      podcastTitle: result.podcastTitle,
       source: "semantic",
       segmentId: null,
     });

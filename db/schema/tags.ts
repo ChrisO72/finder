@@ -1,7 +1,7 @@
 import { index, integer, pgTable, primaryKey, uniqueIndex, varchar } from "drizzle-orm/pg-core";
+import { episodes } from "./episodes";
 import { organizations } from "./organizations";
 import { timestamps } from "./shared";
-import { videos } from "./videos";
 
 export const tags = pgTable(
   "tags",
@@ -17,23 +17,23 @@ export const tags = pgTable(
   (table) => [uniqueIndex("tags_slug_org_idx").on(table.slug, table.organizationId)],
 );
 
-export const videoTags = pgTable(
-  "video_tags",
+export const episodeTags = pgTable(
+  "episode_tags",
   {
-    videoId: integer("video_id")
+    episodeId: integer("episode_id")
       .notNull()
-      .references(() => videos.id, { onDelete: "cascade" }),
+      .references(() => episodes.id, { onDelete: "cascade" }),
     tagId: integer("tag_id")
       .notNull()
       .references(() => tags.id, { onDelete: "cascade" }),
   },
   (table) => [
-    primaryKey({ columns: [table.videoId, table.tagId] }),
-    index("video_tags_tag_id_idx").on(table.tagId),
+    primaryKey({ columns: [table.episodeId, table.tagId] }),
+    index("episode_tags_tag_id_idx").on(table.tagId),
   ],
 );
 
 export type SelectTag = typeof tags.$inferSelect;
 export type InsertTag = typeof tags.$inferInsert;
-export type SelectVideoTag = typeof videoTags.$inferSelect;
-export type InsertVideoTag = typeof videoTags.$inferInsert;
+export type SelectEpisodeTag = typeof episodeTags.$inferSelect;
+export type InsertEpisodeTag = typeof episodeTags.$inferInsert;

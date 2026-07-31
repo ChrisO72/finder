@@ -1,12 +1,12 @@
 import type { Job } from "bullmq";
 import {
-  handleProcessVideoJob,
-  type ProcessVideoJobData,
-  processVideoJobName,
-} from "./process-video";
+  handleProcessEpisodeJob,
+  type ProcessEpisodeJobData,
+  processEpisodeJobName,
+} from "./process-episode";
 
 export type JobData = {
-  [processVideoJobName]: ProcessVideoJobData;
+  [processEpisodeJobName]: ProcessEpisodeJobData;
 };
 
 export type JobName = keyof JobData;
@@ -20,8 +20,8 @@ export async function processJob(job: Job<JobData[JobName], void, JobName>) {
 
   const typedJob = job as TypedJob;
   switch (typedJob.name) {
-    case processVideoJobName:
-      await handleProcessVideoJob(typedJob.data);
+    case processEpisodeJobName:
+      await handleProcessEpisodeJob(typedJob.data);
       break;
     default:
       throw new Error(`[Worker] Unknown job name: ${job.name}`);

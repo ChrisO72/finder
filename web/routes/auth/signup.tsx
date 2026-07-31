@@ -27,7 +27,7 @@ const signupSchema = z.object({
 export async function loader({ request }: Route.LoaderArgs) {
   const accessToken = await readAccessTokenCookie(request);
   if (accessToken && verifyAccessToken(accessToken)) {
-    return redirect("/");
+    return redirect("/admin");
   }
   return null;
 }
@@ -75,7 +75,7 @@ export async function action({ request }: Route.ActionArgs): Promise<ActionData 
   const { accessToken, refreshToken } = await createTokens(user.id, user.email);
   const cookies = await setAuthCookies(accessToken, refreshToken);
 
-  return redirect("/", {
+  return redirect(user.role === "admin" ? "/admin" : "/", {
     headers: cookies.map((cookie) => ["Set-Cookie", cookie] as [string, string]),
   });
 }

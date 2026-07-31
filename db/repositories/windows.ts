@@ -7,6 +7,6 @@ export async function bulkInsertWindows(rows: InsertWindow[]) {
   return await db.insert(windows).values(rows).returning();
 }
 
-export async function deleteWindowsByVideoId(videoId: number) {
-  return await db.delete(windows).where(eq(windows.videoId, videoId));
+export async function deleteWindowsByEpisodeId(episodeId: number) {
+  return await db.delete(windows).where(eq(windows.episodeId, episodeId));
 }

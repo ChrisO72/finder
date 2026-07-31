@@ -1,1 +1,0 @@
-ALTER TABLE "organizations" ADD COLUMN "webshare_proxy_url" text;

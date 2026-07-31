@@ -4,24 +4,25 @@ React Router 8 SSR application. See the repository [README](../README.md) for se
 
 ## Routes and authentication
 
-Routes are declared in [routes.ts](routes.ts). Public auth routes sit outside the protected
-[layout route](routes/layout.tsx); its middleware authenticates once, stores the user in
-`authenticatedUserContext`, and appends rotated cookies to the response. Protected loaders and
-actions read that user with `getAuthenticatedUser(context)`.
+Routes are declared in [routes.ts](routes.ts). The landing page and auth routes sit outside the
+protected [layout route](routes/layout.tsx); its middleware authenticates once, stores the user in
+`authenticatedUserContext`, and appends rotated cookies to the response. The nested admin layout
+enforces the administrator role for the entire application.
 
 Finder keeps all domain reads and writes scoped to `user.organizationId`:
 
-- `/` searches transcript segments, semantic windows, summaries, and tags.
-- `/videos` creates and lists videos and enqueues the typed `process-video` job.
-- `/videos/:id` owns playback, transcript navigation, retry, and soft deletion.
-- `/settings` stores organization-specific proxy and YouTube cookie configuration.
-- `/admin` controls signup policy and user administration.
+- `/` is the public landing page.
+- `/admin` searches transcript segments, semantic windows, summaries, and tags.
+- `/admin/episodes` saves and manually syncs Buzzsprout feeds and lists imported episodes.
+- `/admin/episodes/:id` owns audio playback, transcript navigation, retry, and soft deletion.
+- `/admin/users` and `/admin/settings` control user accounts and signup policy.
 
 ## Server boundaries and data access
 
 - Server-only modules end in `.server.ts`.
 - Routes access PostgreSQL only through `~/db/repositories/*`.
 - Queue producers use `enqueueJob`; they never add directly to a BullMQ queue.
+- Buzzsprout RSS parsing and validation lives in [lib/buzzsprout.server.ts](lib/buzzsprout.server.ts).
 - Mistral query embeddings live in [lib/search.server.ts](lib/search.server.ts), outside database
   repositories.
 

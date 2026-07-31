@@ -1,7 +1,7 @@
 import { and, count, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "../db";
-import { tags, videoTags } from "../schema/tags";
-import { videos } from "../schema/videos";
+import { episodes } from "../schema/episodes";
+import { episodeTags, tags } from "../schema/tags";
 
 export async function upsertTag(name: string, slug: string, organizationId: number) {
   const [existing] = await db
@@ -29,25 +29,25 @@ export async function upsertTag(name: string, slug: string, organizationId: numb
   return fallback;
 }
 
-export async function setVideoTags(videoId: number, tagIds: number[]) {
-  await db.delete(videoTags).where(eq(videoTags.videoId, videoId));
+export async function setEpisodeTags(episodeId: number, tagIds: number[]) {
+  await db.delete(episodeTags).where(eq(episodeTags.episodeId, episodeId));
   if (tagIds.length === 0) return;
-  await db.insert(videoTags).values(tagIds.map((tagId) => ({ videoId, tagId })));
+  await db.insert(episodeTags).values(tagIds.map((tagId) => ({ episodeId, tagId })));
 }
 
-export async function getTagsForVideo(videoId: number) {
+export async function getTagsForEpisode(episodeId: number) {
   return await db
     .select({ id: tags.id, name: tags.name, slug: tags.slug })
     .from(tags)
-    .innerJoin(videoTags, eq(videoTags.tagId, tags.id))
-    .where(eq(videoTags.videoId, videoId));
+    .innerJoin(episodeTags, eq(episodeTags.tagId, tags.id))
+    .where(eq(episodeTags.episodeId, episodeId));
 }
 
 export type TagWithCount = {
   id: number;
   name: string;
   slug: string;
-  videoCount: number;
+  episodeCount: number;
 };
 
 export async function getTagsByOrganization(organizationId: number): Promise<TagWithCount[]> {
@@ -56,70 +56,69 @@ export async function getTagsByOrganization(organizationId: number): Promise<Tag
       id: tags.id,
       name: tags.name,
       slug: tags.slug,
-      videoCount: count(videoTags.videoId),
+      episodeCount: count(episodeTags.episodeId),
     })
     .from(tags)
-    .innerJoin(videoTags, eq(videoTags.tagId, tags.id))
-    .innerJoin(videos, eq(videoTags.videoId, videos.id))
+    .innerJoin(episodeTags, eq(episodeTags.tagId, tags.id))
+    .innerJoin(episodes, eq(episodeTags.episodeId, episodes.id))
     .where(
       and(
         eq(tags.organizationId, organizationId),
-        isNull(videos.deletedAt),
-        eq(videos.status, "ready"),
+        isNull(episodes.deletedAt),
+        eq(episodes.status, "ready"),
       ),
     )
     .groupBy(tags.id, tags.name, tags.slug)
-    .orderBy(sql`count(${videoTags.videoId}) DESC`);
+    .orderBy(sql`count(${episodeTags.episodeId}) DESC`);
 
   return rows.map((r) => ({
     id: r.id,
     name: r.name,
     slug: r.slug,
-    videoCount: r.videoCount,
+    episodeCount: r.episodeCount,
   }));
 }
 
-export async function getVideosByTag(tagSlug: string, organizationId: number) {
+export async function getEpisodesByTag(tagSlug: string, organizationId: number) {
   return await db
     .select({
-      id: videos.id,
-      title: videos.title,
-      channelTitle: videos.channelTitle,
-      thumbnailUrl: videos.thumbnailUrl,
-      durationSeconds: videos.durationSeconds,
-      youtubeVideoId: videos.youtubeVideoId,
+      id: episodes.id,
+      title: episodes.title,
+      podcastTitle: episodes.podcastTitle,
+      artworkUrl: episodes.artworkUrl,
+      durationSeconds: episodes.durationSeconds,
     })
-    .from(videos)
-    .innerJoin(videoTags, eq(videoTags.videoId, videos.id))
-    .innerJoin(tags, eq(videoTags.tagId, tags.id))
+    .from(episodes)
+    .innerJoin(episodeTags, eq(episodeTags.episodeId, episodes.id))
+    .innerJoin(tags, eq(episodeTags.tagId, tags.id))
     .where(
       and(
         eq(tags.slug, tagSlug),
         eq(tags.organizationId, organizationId),
-        isNull(videos.deletedAt),
-        eq(videos.status, "ready"),
+        isNull(episodes.deletedAt),
+        eq(episodes.status, "ready"),
       ),
     );
 }
 
-export async function getTagsForVideoIds(
-  videoIds: number[],
+export async function getTagsForEpisodeIds(
+  episodeIds: number[],
 ): Promise<Record<number, { id: number; name: string; slug: string }[]>> {
-  if (videoIds.length === 0) return {};
+  if (episodeIds.length === 0) return {};
   const rows = await db
     .select({
-      videoId: videoTags.videoId,
+      episodeId: episodeTags.episodeId,
       id: tags.id,
       name: tags.name,
       slug: tags.slug,
     })
-    .from(videoTags)
-    .innerJoin(tags, eq(videoTags.tagId, tags.id))
-    .where(inArray(videoTags.videoId, videoIds));
+    .from(episodeTags)
+    .innerJoin(tags, eq(episodeTags.tagId, tags.id))
+    .where(inArray(episodeTags.episodeId, episodeIds));
 
   const map: Record<number, { id: number; name: string; slug: string }[]> = {};
   for (const row of rows) {
-    (map[row.videoId] ??= []).push({
+    (map[row.episodeId] ??= []).push({
       id: row.id,
       name: row.name,
       slug: row.slug,
@@ -128,22 +127,22 @@ export async function getTagsForVideoIds(
   return map;
 }
 
-export async function getVideoIdsForTag(
+export async function getEpisodeIdsForTag(
   tagSlug: string,
   organizationId: number,
 ): Promise<number[]> {
   const rows = await db
-    .select({ videoId: videoTags.videoId })
-    .from(videoTags)
-    .innerJoin(tags, eq(videoTags.tagId, tags.id))
-    .innerJoin(videos, eq(videoTags.videoId, videos.id))
+    .select({ episodeId: episodeTags.episodeId })
+    .from(episodeTags)
+    .innerJoin(tags, eq(episodeTags.tagId, tags.id))
+    .innerJoin(episodes, eq(episodeTags.episodeId, episodes.id))
     .where(
       and(
         eq(tags.slug, tagSlug),
         eq(tags.organizationId, organizationId),
-        isNull(videos.deletedAt),
+        isNull(episodes.deletedAt),
       ),
     );
 
-  return rows.map((r) => r.videoId);
+  return rows.map((r) => r.episodeId);
 }

@@ -37,7 +37,6 @@ export async function transcribeChunk(
         model: "voxtral-mini-latest",
         file,
         timestampGranularities: ["segment"],
-        language: "en",
       }),
     `transcribe ${fileName}`,
   );

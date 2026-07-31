@@ -1,15 +1,15 @@
 import { sql } from "drizzle-orm";
 import { index, integer, pgTable, real, text, timestamp } from "drizzle-orm/pg-core";
+import { episodes } from "./episodes";
 import { vector } from "./vector";
-import { videos } from "./videos";
 
 export const windows = pgTable(
   "windows",
   {
     id: integer().primaryKey().generatedAlwaysAsIdentity(),
-    videoId: integer("video_id")
+    episodeId: integer("episode_id")
       .notNull()
-      .references(() => videos.id, { onDelete: "cascade" }),
+      .references(() => episodes.id, { onDelete: "cascade" }),
     text: text().notNull(),
     startSeconds: real("start_seconds").notNull(),
     endSeconds: real("end_seconds").notNull(),
@@ -17,7 +17,7 @@ export const windows = pgTable(
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [
-    index("windows_video_id_idx").on(table.videoId),
+    index("windows_episode_id_idx").on(table.episodeId),
     index("windows_embedding_idx").using("hnsw", sql`${table.embedding} vector_cosine_ops`),
   ],
 );

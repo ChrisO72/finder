@@ -21,7 +21,7 @@ const RESEND_COOLDOWN_MS = 5 * 60 * 1000;
 export async function loader({ request }: Route.LoaderArgs) {
   const accessToken = await readAccessTokenCookie(request);
   if (accessToken && verifyAccessToken(accessToken)) {
-    return redirect("/");
+    return redirect("/admin");
   }
 
   const email = new URL(request.url).searchParams.get("email");

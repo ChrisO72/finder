@@ -13,7 +13,7 @@ export async function generateSummary(transcript: string): Promise<string> {
           {
             role: "system",
             content:
-              "You are a helpful assistant that summarizes video transcripts. " +
+              "You are a helpful assistant that summarizes podcast transcripts. " +
               "Produce a concise summary of 2-3 paragraphs covering the key topics, " +
               "takeaways, and themes. Write in plain prose, no bullet points or headings. " +
               "IMPORTANT: Write the summary in the same language as the transcript.",

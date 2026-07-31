@@ -1,7 +1,8 @@
 import { Mistral } from "@mistralai/mistralai";
+import { env } from "~/env.server";
 import { withRetry } from "./retry";
 
-const client = new Mistral({ apiKey: process.env.MISTRAL_API_KEY! });
+const client = new Mistral({ apiKey: env.MISTRAL_API_KEY });
 
 export async function generateTags(summary: string): Promise<string[]> {
   const result = await withRetry(
@@ -12,7 +13,7 @@ export async function generateTags(summary: string): Promise<string[]> {
           {
             role: "system",
             content:
-              "Extract 3-8 short topic tags from the following video summary. " +
+              "Extract 3-8 short topic tags from the following podcast episode summary. " +
               "Each tag should be 1-3 words, lowercase, and descriptive of a key topic. " +
               "IMPORTANT: Write the tags in the same language as the summary. " +
               'Respond with ONLY a JSON array of strings, e.g. ["machine learning", "python", "data science"]. ' +

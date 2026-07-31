@@ -1,20 +1,23 @@
 import { redirect } from "react-router";
-import { clearAuthCookies, parseCookies } from "../../lib/session.server";
-import { deleteRefreshToken } from "../../../db/repositories/auth";
+import { deleteRefreshTokenByHash } from "~/db/repositories/refreshTokens";
+import { hashRefreshToken } from "~/lib/auth/tokens.server";
+import { clearAuthCookies, readRefreshTokenCookie } from "~/lib/session.server";
 import type { Route } from "./+types/logout";
 
-export async function loader({ request }: Route.LoaderArgs) {
-  const cookieHeader = request.headers.get("Cookie") || "";
-  const cookies = parseCookies(cookieHeader);
-
-  if (cookies.refreshToken) {
-    await deleteRefreshToken(cookies.refreshToken);
+export async function action({ request }: Route.ActionArgs) {
+  const refreshToken = await readRefreshTokenCookie(request);
+  if (refreshToken) {
+    await deleteRefreshTokenByHash(hashRefreshToken(refreshToken));
   }
 
-  const clearCookies = clearAuthCookies();
+  const clearCookies = await clearAuthCookies();
   return redirect("/login", {
     headers: clearCookies.map((cookie) => ["Set-Cookie", cookie] as [string, string]),
   });
+}
+
+export async function loader() {
+  return redirect("/login");
 }
 
 export default function Logout() {

@@ -1,9 +1,10 @@
 import { Mistral } from "@mistralai/mistralai";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { env } from "~/env.server";
 import { withRetry } from "./retry";
 
-const client = new Mistral({ apiKey: process.env.MISTRAL_API_KEY! });
+const client = new Mistral({ apiKey: env.MISTRAL_API_KEY });
 
 export type TranscriptSegment = {
   text: string;
@@ -17,8 +18,18 @@ export async function transcribeChunk(
 ): Promise<TranscriptSegment[]> {
   const fileBuffer = await readFile(filePath);
   const fileName = path.basename(filePath);
+  const ext = path.extname(filePath).toLowerCase();
+  const mimeTypes: Record<string, string> = {
+    ".webm": "audio/webm",
+    ".mp4": "audio/mp4",
+    ".m4a": "audio/mp4",
+    ".ogg": "audio/ogg",
+    ".opus": "audio/opus",
+    ".wav": "audio/wav",
+    ".mp3": "audio/mpeg",
+  };
 
-  const file = new File([fileBuffer], fileName, { type: "audio/mp4" });
+  const file = new File([fileBuffer], fileName, { type: mimeTypes[ext] ?? "audio/webm" });
 
   const result = await withRetry(
     () =>
@@ -26,7 +37,6 @@ export async function transcribeChunk(
         model: "voxtral-mini-latest",
         file,
         timestampGranularities: ["segment"],
-        language: "en",
       }),
     `transcribe ${fileName}`,
   );

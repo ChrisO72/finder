@@ -1,6 +1,6 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { db } from "../db";
-import { type InsertOrganization, organizations } from "../schema";
+import { type InsertOrganization, organizations } from "../schema/organizations";
 
 export async function createOrganization(organization: InsertOrganization) {
   return await db.insert(organizations).values(organization).returning();
